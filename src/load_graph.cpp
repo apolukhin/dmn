@@ -72,6 +72,25 @@ void validate_flow_network(const graph_t& graph) {
     hawick_circuits(graph, on_circut{});
 }
 
+void validate_vertexes(const graph_t& graph) {
+    const auto all_vertices = vertices(graph);
+    for (auto vp = all_vertices; vp.first != vp.second; ++vp.first) {
+        const vertex_t& v = graph[*vp.first];
+
+        if (v.hosts.empty()) {
+            throw std::runtime_error(
+                "Each vertex must have a non empty hosts property. Example:\n"
+                "(digraph graph {\n"
+                "    a [hosts = '127.0.0.1:44001'];\n"
+                "    b [hosts = '127.0.0.1:44003'];\n"
+                "    a -> b;\n"
+                "}"
+            );
+        }
+    }
+
+}
+
 }
 
 graph_t load_graph(std::istream& in) {
@@ -83,6 +102,7 @@ graph_t load_graph(std::istream& in) {
 
     boost::read_graphviz(in, graph, dp);
     validate_flow_network(graph);
+    validate_vertexes(graph);
 
     return graph;
 }

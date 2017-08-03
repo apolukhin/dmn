@@ -18,6 +18,8 @@ MESSAGE("Using Boost libraries path: ${Boost_LIBRARY_DIRS}")
 add_library(dmn_core STATIC
     src/load_graph.hpp
     src/load_graph.cpp
+    src/node.hpp
+    src/node.cpp
 )
 
 

@@ -106,3 +106,22 @@ BOOST_AUTO_TEST_CASE(graph_topology_validation) {
     )");
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message{"Graph has a circut: a -> a"});
 }
+
+
+BOOST_AUTO_TEST_CASE(graph_vertex_data_validation) {
+    std::stringstream ss;
+    ss.str(R"(
+        digraph graph
+        {
+           a -> b;
+        }
+    )");
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
+        "Each vertex must have a non empty hosts property. Example:\n"
+        "(digraph graph {\n"
+        "    a [hosts = '127.0.0.1:44001'];\n"
+        "    b [hosts = '127.0.0.1:44003'];\n"
+        "    a -> b;\n"
+        "}"
+    });
+}
