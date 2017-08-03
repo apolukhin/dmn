@@ -13,8 +13,14 @@ namespace {
 
 struct on_circut {
     template <class T, class Graph>
-    void cycle(const T&, const Graph& g) const {
-        throw std::runtime_error("Graph has a circut");
+    void cycle(const T& container, const Graph& g) const {
+        std::string msg = "Graph has a circut: ";
+        for (const auto& v: container) {
+            msg += g[v].node_id;
+            msg += " -> ";
+        }
+        msg += g[container.front()].node_id;
+        throw std::runtime_error(std::move(msg));
     }
 };
 
@@ -56,11 +62,11 @@ void validate_flow_network(const graph_t& graph) {
     }
 
     if (!sink) {
-        throw std::runtime_error("Graph has no sink");
+        throw std::runtime_error("Graph has no sink! There must be one vertex with incomming edges and no outgoing edges.");
     }
 
     if (!source) {
-        throw std::runtime_error("Graph has no source");
+        throw std::runtime_error("Graph has no source! There must be one vertex with outgoing edges and no incomming edges.");
     }
 
     hawick_circuits(graph, on_circut{});
