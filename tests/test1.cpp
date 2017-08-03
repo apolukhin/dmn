@@ -21,6 +21,41 @@ BOOST_AUTO_TEST_CASE(test_graph_loading) {
             b -> c;
         }
     )"};
-    const auto g = dmn::load_graph(ss);
-    BOOST_TEST(boost::num_vertices(g) == 3);
+    BOOST_TEST(boost::num_vertices(dmn::load_graph(ss)) == 3);
+
+
+    ss.str(R"(
+        digraph graph
+        {
+           a -> b;
+           b -> c;
+           c -> b;
+        }
+    )");
+    BOOST_CHECK_THROW(dmn::load_graph(ss), std::runtime_error);
+
+
+    ss.str(R"(
+        digraph graph
+        {
+           a -> b;
+           b -> a;
+           b -> c;
+           a -> c;
+        }
+    )");
+    BOOST_CHECK_THROW(dmn::load_graph(ss), std::runtime_error);
+
+
+
+    ss.str(R"(
+        digraph graph
+        {
+           a -> b;
+           b -> c;
+           c -> b;
+           c -> d;
+        }
+    )");
+    BOOST_CHECK_THROW(dmn::load_graph(ss), std::runtime_error);
 }

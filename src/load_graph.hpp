@@ -12,7 +12,7 @@ struct vertex_t {
 using graph_t = boost::adjacency_list<
     boost::vecS
     , boost::vecS
-    , boost::directedS
+    , boost::bidirectionalS
     , vertex_t
 >;
 
