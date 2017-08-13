@@ -5,7 +5,11 @@
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/hawick_circuits.hpp>
 #include <boost/optional.hpp>
-#include <iostream>
+
+#include <boost/algorithm/string.hpp>
+
+#include <istream>
+#include <ostream>
 
 namespace dmn {
 
@@ -91,6 +95,20 @@ void validate_vertexes(const graph_t& graph) {
 
 }
 
+} // anonymous namespace
+
+static std::istream& operator>>(std::istream& in, hosts_strong_t& hosts) {
+    std::string hosts_raw(std::istreambuf_iterator<char>(in), {});
+
+    boost::split(hosts.base(), hosts_raw, boost::is_any_of(";"), boost::token_compress_on);
+    return in;
+}
+
+static std::ostream& operator<<(std::ostream& os, const hosts_strong_t& hosts) {
+    for (const auto& h : hosts.base()) {
+        os << h << ';';
+    }
+    return os;
 }
 
 graph_t load_graph(std::istream& in) {
