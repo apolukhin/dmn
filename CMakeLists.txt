@@ -1,8 +1,13 @@
 project(DMN)
 cmake_minimum_required(VERSION 2.8)
 
-set_property(GLOBAL PROPERTY CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+if (CMAKE_VERSION VERSION_LESS "3.1")
+    set (CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
+else ()
+    set (CMAKE_CXX_STANDARD 14)
+endif ()
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations -Wfatal-errors")
 
 # Boost setup
 set(BOOST_ROOT "/data/boost")
@@ -21,19 +26,22 @@ add_library(dmn_core STATIC
     src/load_graph.hpp
     src/load_graph.cpp
 
+    src/netlink.hpp
+    src/netlink.cpp
+    src/packet.hpp
+    src/packet_network.hpp
+    src/packet_network.cpp
     src/stream.hpp
-    src/message.hpp
-    src/message_header.hpp
 
     src/node.hpp
     src/node.cpp
     src/node_base.hpp
     src/node_base.cpp
 
-    src/node_impl_0_x.hpp
-    src/node_impl_1_x.hpp
-    src/node_impl_x_0.hpp
-    src/node_impl_x_1.hpp
+    src/node_impl/read_0.hpp
+    src/node_impl/read_1.hpp
+    src/node_impl/write_0.hpp
+    src/node_impl/write_1.hpp
 )
 
 

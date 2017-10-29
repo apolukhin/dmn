@@ -2,12 +2,13 @@
 
 #include "node.hpp"
 #include "load_graph.hpp"
+#include "packet.hpp"
 
 #include <boost/dll/shared_library.hpp>
 
 namespace dmn {
 
-struct message_t;
+struct stream_t;
 
 class node_base_t: public node_t {
 protected:
@@ -20,21 +21,15 @@ public:
 
     const boost::dll::shared_library lib;
 
-    using callback_t = void(const dmn::node_t&, message_t&);
+    using callback_t = void(stream_t&);
     const callback_t callback_;
 
     // Functions:
     node_base_t(std::istream& in, const char* node_id);
 
-    virtual void on_message(message_t&& /*m*/) = 0;
-
-    void add_message(const void* data, std::size_t size, const char* type = "") override {
-        throw std::logic_error("You shall not construct messages on non source node");
-    }
-
-    void send_message() override {
-        throw std::logic_error("You shall not send messages on sink node");
-    }
+    virtual void start() = 0;
+    virtual void on_packet_accept(packet_native_t&& packet) = 0;
+    virtual void on_packet_send(packet_native_t&& packet) = 0;
 };
 
 void run_node(std::istream& in, const char* node_id);
