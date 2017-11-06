@@ -14,6 +14,19 @@ struct exception_message {
     }
 };
 
+BOOST_AUTO_TEST_CASE(graph_loading_base) {
+    std::stringstream ss{R"(
+        digraph graph
+        {
+            a [hosts = "127.0.0.1:44001"];
+            b [hosts = "127.0.0.1:44003"];
+            a -> b;
+        }
+    )"};
+    BOOST_TEST(boost::num_vertices(dmn::load_graph(ss)) == 2);
+
+}
+
 BOOST_AUTO_TEST_CASE(graph_loading) {
     std::stringstream ss{R"(
         digraph graph

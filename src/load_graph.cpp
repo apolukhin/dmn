@@ -7,6 +7,7 @@
 #include <boost/optional.hpp>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/utility/string_view.hpp>
 
 #include <istream>
 #include <ostream>
@@ -100,13 +101,21 @@ void validate_vertexes(const graph_t& graph) {
 static std::istream& operator>>(std::istream& in, hosts_strong_t& hosts) {
     std::string hosts_raw(std::istreambuf_iterator<char>(in), {});
 
-    boost::split(hosts.base(), hosts_raw, boost::is_any_of(";"), boost::token_compress_on);
+    std::vector<std::string> hosts_with_port;
+    boost::split(hosts_with_port, hosts_raw, boost::is_any_of(";"), boost::token_compress_on);
+    for (auto& v: hosts_with_port) {
+        const auto delim = v.find(':');
+        hosts.base().emplace_back(
+            v.substr(0, v.find(':')),
+            (delim == std::string::npos ? 63101 : boost::lexical_cast<unsigned short>(v.substr(delim + 1)))
+        );
+    }
     return in;
 }
 
 static std::ostream& operator<<(std::ostream& os, const hosts_strong_t& hosts) {
     for (const auto& h : hosts.base()) {
-        os << h << ';';
+        os << h.first << ':' << h.second << ';';
     }
     return os;
 }

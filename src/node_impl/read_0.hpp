@@ -3,29 +3,32 @@
 #include "node_base.hpp"
 #include "packet.hpp"
 #include "stream.hpp"
+#include "write_work.hpp"
 
 #include <boost/asio/io_service.hpp>
 
 namespace dmn {
 
 class node_impl_read_0: public virtual node_base_t {
-public:
-    node_impl_read_0(std::istream& in, const char* node_id)
-        : node_base_t(in, node_id)
-    {}
-
-    void start() override final {
-        ios().post([this](){
-            stream_t s{*this};
-            node_base_t::callback_(s);
-            start();
-
-            on_packet_send(s.move_out_data());
+    void start(read_ticket_t&& ticket) {
+        ios().post([this, ticket = std::move(ticket)]() mutable {
+            const stop_enum state = on_packet_accept(write_counter_.ticket(), packet_native_t{});
+            if (state == stop_enum::RUN) {
+                start(std::move(ticket));
+            } else {
+                if (ticket.release()->unlock_last()) {
+                    stop_writing();
+                }
+            }
         });
     }
+public:
+    node_impl_read_0() {
+        start(read_counter_.ticket()); // TODO: mutithreaded run
+    }
 
-    void on_packet_accept(packet_native_t&& /*packet*/) override final {
-        BOOST_ASSERT_MSG(false, "Must not be called for non accepting vertexes");
+    void stop_reading() override {
+        state_.store(stop_enum::STOPPING_READ, std::memory_order_relaxed);
     }
 
     ~node_impl_read_0() noexcept = default;

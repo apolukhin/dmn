@@ -4,8 +4,8 @@
 
 namespace dmn {
 
-struct hosts_strong_t: private std::vector<std::string> {
-    using base_t = std::vector<std::string>;
+struct hosts_strong_t: private std::vector<std::pair<std::string, unsigned short>> {
+    using base_t = std::vector<std::pair<std::string, unsigned short>>;
 
     using base_t::value_type;
     using base_t::iterator;
@@ -15,6 +15,7 @@ struct hosts_strong_t: private std::vector<std::string> {
     using base_t::begin;
     using base_t::end;
     using base_t::operator[];
+    using base_t::front;
     using base_t::push_back;
     using base_t::empty;
     using base_t::swap;

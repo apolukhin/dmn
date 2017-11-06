@@ -25,7 +25,11 @@ public:
 
     explicit packet_header_network_t(packet_header_native_t&& n) noexcept;
     packet_header_native_t to_native() noexcept;
-    auto buffer() noexcept {
+    auto read_buffer() noexcept {
+        return boost::asio::buffer(reinterpret_cast<unsigned char*>(this), sizeof(packet_header_network_t));
+    }
+
+    auto write_buffer() noexcept {
         return boost::asio::buffer(reinterpret_cast<unsigned char*>(this), sizeof(packet_header_network_t));
     }
 };
@@ -43,10 +47,17 @@ public:
 
     explicit packet_body_network_t(packet_body_native_t&& n) noexcept;
     packet_body_native_t to_native() noexcept;
-    auto buffer() noexcept {
-        BOOST_ASSERT(!data_.empty());
+
+    auto write_buffer(std::size_t size) {
+        data_.resize(size);
         return boost::asio::mutable_buffers_1{
             data_.empty() ? boost::asio::mutable_buffer() : boost::asio::mutable_buffer(&data_[0], data_.size())
+        };
+    }
+    auto read_buffer() noexcept {
+        BOOST_ASSERT(!data_.empty());
+        return boost::asio::const_buffers_1{
+            data_.empty() ? boost::asio::const_buffer() : boost::asio::const_buffer(&data_[0], data_.size())
         };
     }
 };
@@ -68,10 +79,10 @@ struct packet_network_t {
         };
     }    
 
-    std::array<boost::asio::mutable_buffer, 2> buffer() noexcept {
-        return std::array<boost::asio::mutable_buffer, 2> {
-            *header_.buffer().begin(),
-            *body_.buffer().begin()
+    std::array<boost::asio::const_buffer, 2> read_buffer() noexcept {
+        return std::array<boost::asio::const_buffer, 2> {
+            *header_.read_buffer().begin(),
+            *body_.read_buffer().begin()
         };
     }
 };

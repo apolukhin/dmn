@@ -8,13 +8,13 @@
 namespace dmn {
 
 class node_impl_write_1: public virtual node_base_t {
-    std::mutex                  netlinks_mutex_;
-    std::deque<netlink_ptr>     netlinks_;
+    std::mutex                      netlinks_mutex_;
+    std::deque<netlink_write_ptr>   netlinks_;
 
-    netlink_t::guart_t try_get_netlink_or_reschedule() {
+    netlink_write_t::guard_t try_get_netlink() {
         std::unique_lock<std::mutex> guard(netlinks_mutex_);
         for (auto& link: netlinks_) {
-            netlink_t::guart_t lock = link->try_lock();
+            netlink_write_t::guard_t lock = link->try_lock();
             if (lock) {
                 return lock;
             }
@@ -24,9 +24,7 @@ class node_impl_write_1: public virtual node_base_t {
     }
 
 public:
-    node_impl_write_1(std::istream& in, const char* node_id)
-        : node_base_t(in, node_id)
-    {
+    node_impl_write_1() {
         const auto edges_out = boost::out_edges(
             this_node_descriptor,
             config
@@ -36,26 +34,30 @@ public:
         const vertex_t& out_vertex = config[target(*edges_out.first, config)];
 
         for (const auto& host : out_vertex.hosts) {
-            netlinks_.emplace_back(netlink_t::construct(*this, host.c_str()));
+            netlinks_.emplace_back(netlink_write_t::construct(*this, host.first.c_str(), host.second));
         }
     }
 
+    virtual void stop_writing() override final {
+        state_.store(stop_enum::STOPPING_WRITE, std::memory_order_relaxed);
+        // TODO:
+        // Sending SHUTDOWN_GRACEFULLY to all the links after there's no outstanding work
+    }
 
-    void on_packet_send(packet_native_t&& data) override final {
-        auto l = try_get_netlink_or_reschedule();
+    void on_packet_send(write_ticket_t&& ticket, packet_native_t&& data) override final {
+        auto l = try_get_netlink();
         if (!l) {
             // Reschedule
             ios().post(
-                [this, m = std::move(data)]() mutable {
-                    on_packet_send(std::move(m));
+                [this, m = std::move(data), ticket = std::move(ticket)]() mutable {
+                    on_packet_send(std::move(ticket), std::move(m));
                 }
             );
             return;
         }
 
         auto& link = *l.mutex();
-        link.async_send(std::move(l), std::move(data));
-    }
+        link.async_send(std::move(ticket), std::move(l), std::move(data));    }
 
     ~node_impl_write_1() noexcept = default;
 };
