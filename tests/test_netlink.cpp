@@ -1,95 +1,68 @@
 #include "netlink.hpp"
+#include "node.hpp"
 #include <numeric>
 
 #include <boost/test/unit_test.hpp>
-/*
+#include "tests_common.hpp"
+
 namespace {
 
-struct netlink_test_node: dmn::node_base_t {
-    boost::asio::ip::tcp::acceptor  acceptor_;
-    boost::asio::ip::tcp::socket    new_socket_;
-    dmn::netlink_read_ptr                netlink_in_;
-    dmn::netlink_write_ptr                netlink_out_;
+void netlink_back_and_forth_test_impl(dmn::packet_native_t&& packet) {
+    boost::asio::ip::tcp::acceptor  acceptor{
+        dmn::node_t::ios(),
+        boost::asio::ip::tcp::endpoint(
+            boost::asio::ip::tcp::v4(), 63101  // TODO: port
+        )
+    };
+    boost::asio::ip::tcp::socket    new_socket{dmn::node_t::ios()};
+    const dmn::packet_native_t ethalon = tests::clone(packet);
+    dmn::netlink_read_ptr           netlink_in;
 
-    dmn::packet_native_t            ethalon_;
+    bool sended = false;
     int received = 0;
     bool accepted = false;
 
-    netlink_test_node(const dmn::graph_t& in, const char* node_id)
-        : node_base_t(in, node_id)
-        , acceptor_(
-                ios(),
-                boost::asio::ip::tcp::endpoint(
-                    boost::asio::ip::tcp::v4(), 63101  // TODO: port
-                )
-            )
-        , new_socket_(ios())
-    {
-        start_accept();
-        netlink_out_
-    }
+    acceptor.async_accept(new_socket, [&](const boost::system::error_code& error) {
+        BOOST_TEST(!error);
+        accepted = true;
 
-    void on_accept(const boost::system::error_code& error) {
-        BOOST_CHECK (!error);
-        BOOST_CHECK (!netlink_);
-        netlink_ = dmn::netlink_t::construct(*this, std::move(new_socket_));
-    }
+        netlink_in = dmn::netlink_read_t::construct(
+            std::move(new_socket),
+            [&](auto*, auto& e){
+                BOOST_TEST(received == 1);
+            },
+            [&](dmn::packet_native_t&& packet) {
+                BOOST_CHECK(!ethalon.body_.data_.empty());
+                BOOST_CHECK(packet.body_.data_ == ethalon.body_.data_);
+                ++ received;
+            }
+        );
+    });
 
-    void start_accept() {
-        acceptor_.async_accept(new_socket_, [this](const boost::system::error_code& error) {
-            on_accept(error);
-        });
-    }
 
-    void stopping() override {
-        acceptor_.cancel();
-    }
-    void stopped() override {
-    }
-
-    void on_packet_accept(dmn::packet_native_t&& packet) {
-        BOOST_CHECK(!ethalon_.body_.data_.empty());
-        BOOST_CHECK(packet.body_.data_ == ethalon_.body_.data_);
-        -- write_work_;
-        ++ received;
-        if (received == 2) {
-            stopping();
-            return;
+    dmn::netlink_write_ptr netlink_out = dmn::netlink_write_t::construct("127.0.0.1", 63101, dmn::node_t::ios(),
+        [&](dmn::netlink_write_t* l, const boost::system::error_code&, auto&& g) {
+            BOOST_TEST(l == netlink_out.get());
+            l->async_connect(std::move(g));
+        },
+        [&](dmn::netlink_write_t* l, auto g) {
+            if (sended) return;
+            sended = true;
+            netlink_out->async_send(std::move(g), std::move(packet));
         }
+    );
 
-        auto g = netlink_->try_lock();
-        BOOST_CHECK(g);
-        netlink_->async_send(std::move(g), std::move(packet));
-    }
+    dmn::node_t::ios().reset();
+    dmn::node_t::ios().poll();
 
-    void on_packet_send(dmn::packet_native_t&& packet) {
-        BOOST_CHECK(false);
-    }
-};
+    netlink_in.reset();
+    netlink_out.reset();
 
-void netlink_back_and_forth_test_impl(dmn::packet_native_t&& packet) {
-    std::stringstream ss;
-    ss.str(R"(
-           digraph graph
-           {
-               a [hosts = "127.0.0.1"];
-               b [hosts = "127.0.0.1"];
-               a -> b;
-           }
-    )");
-    netlink_test_node node(dmn::load_graph(ss), "a");
+    dmn::node_t::ios().poll();
 
-    auto link1 = dmn::netlink_t::construct(node, "127.0.0.1", 63101);
-    auto guard = link1->try_lock();
-    BOOST_CHECK(guard);
-
-    node.ethalon_ = dmn::packet_native_t(packet);
-
-    link1->async_send(std::move(guard), std::move(packet));
-    node.ios().reset();
-    node.ios().run();
-    BOOST_CHECK(node.netlink_);
-    BOOST_CHECK(node.received == 2);
+    BOOST_CHECK(sended);
+    BOOST_CHECK(accepted);
+    BOOST_CHECK(received == 1);
 }
 
 }
@@ -128,5 +101,7 @@ BOOST_AUTO_TEST_CASE(netlink_back_and_forth_multiple_flags) {
         p.body_.add_data(nullptr, 0, name);
     }
     netlink_back_and_forth_test_impl(std::move(p));
+
+    new int;
 }
-*/
+

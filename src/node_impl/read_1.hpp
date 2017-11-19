@@ -13,19 +13,44 @@ namespace dmn {
 class node_impl_read_1: public virtual node_base_t {
     boost::asio::ip::tcp::acceptor  acceptor_;
     boost::asio::ip::tcp::socket    new_socket_;
+
+    std::mutex                      netlinks_mutex_;
     std::deque<netlink_read_ptr>    netlinks_;
 
-    std::atomic<stop_enum> state_ {stop_enum::RUN};
+    void on_error(const netlink_read_t* link, const boost::system::error_code& e) {
+        std::unique_lock<std::mutex> guard(netlinks_mutex_);
+        if (netlinks_.empty()) {
+            no_more_readers();
+            return;
+        }
+
+        auto it = std::find_if(netlinks_.begin(), netlinks_.end(), [link](auto& v){
+            return v.get() == link;
+        });
+        BOOST_ASSERT(it != netlinks_.end());
+
+        auto l = std::move(*it);
+        netlinks_.erase(it);
+        guard.unlock();
+
+        (void)l; // TODO: log issue
+    }
 
     void on_accept(const boost::system::error_code& error) {
-        if (error.value() == boost::asio::error::operation_aborted & state_ != stop_enum::RUN) {
+        if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
             return;
         }
         BOOST_ASSERT(!error);
 
-        netlinks_.push_back(
-            netlink_read_t::construct(*this, std::move(new_socket_), read_counter_.ticket())
+        auto link = netlink_read_t::construct(
+            std::move(new_socket_),
+            [this](auto* p, const auto& e) { on_error(p, e); },
+            [this](auto&& d) { on_packet_accept(std::move(d)); }
         );
+
+        std::unique_lock<std::mutex> guard(netlinks_mutex_);
+        netlinks_.push_back(std::move(link));
+        guard.unlock();
 
         start_accept();
     }
@@ -52,10 +77,17 @@ public:
         start_accept();
     }
 
-    void stop_reading() override final {
+    void on_stop_reading() noexcept override final {
         acceptor_.cancel();
-        state_.store(stop_enum::STOPPING_READ, std::memory_order_relaxed);
-        // writers must send the SHUTDOWN_GRACEFULLY packets to us
+
+        std::unique_lock<std::mutex> guard(netlinks_mutex_);
+        std::for_each(netlinks_.begin(), netlinks_.end(), [](auto& v) {
+            v->cancel();
+        });
+
+        if (netlinks_.empty()) {
+            no_more_readers();
+        }
     }
 
     ~node_impl_read_1() noexcept = default;

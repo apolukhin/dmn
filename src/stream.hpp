@@ -9,20 +9,22 @@ namespace dmn {
 // Does the packet <--> user data conversions
 class stream_t {
     node_base_t& node_;
-    stop_enum& stopping_;
 
     packet_native_t in_data_;
     packet_native_t out_data_;
 
 public:
-    explicit stream_t(node_base_t& node, packet_native_t&& in_data, stop_enum& stopping)
+    explicit stream_t(node_base_t& node, packet_native_t&& in_data)
         : node_(node)
         , in_data_(std::move(in_data))
-        , stopping_(stopping)
     {}
 
     void stop() {
-        stopping_ = stop_enum::STOPPING_READ;
+        node_.shutdown_gracefully();
+    }
+
+    bool is_stopping() const noexcept {
+        return node_.state() != node_state::RUN;
     }
 
     packet_native_t&& move_out_data() noexcept {

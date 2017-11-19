@@ -8,7 +8,6 @@ else ()
 endif ()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations -Wfatal-errors")
 
 # Boost setup
 set(BOOST_ROOT "/data/boost")
@@ -25,12 +24,17 @@ MESSAGE("Using Boost libraries path: ${Boost_LIBRARY_DIRS}")
 
 
 add_library(dmn_core STATIC
+
     src/assert.cpp
+    src/utility.hpp
+    src/silent_mt_queue.hpp
+    src/work_counter.hpp
+
+    src/slab_allocator.hpp
+    src/wrap_handler.hpp
 
     src/load_graph.hpp
     src/load_graph.cpp
-
-    src/write_work.hpp
 
     src/netlink.hpp
     src/netlink.cpp
@@ -43,6 +47,7 @@ add_library(dmn_core STATIC
     src/node.cpp
     src/node_base.hpp
     src/node_base.cpp
+    src/state_tracker.hpp
 
     src/node_impl/read_0.hpp
     src/node_impl/read_1.hpp
@@ -55,5 +60,5 @@ add_executable(dmn src/main.cpp)
 
 
 aux_source_directory(tests SRC_LIST_TESTS)
-add_executable(dmn_tests ${SRC_LIST_TESTS})
+add_executable(dmn_tests ${SRC_LIST_TESTS} tests/tests_common.hpp)
 target_link_libraries(dmn_tests dmn_core boost_system -ldl ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})

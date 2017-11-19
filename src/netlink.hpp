@@ -1,14 +1,12 @@
 #pragma once
 
-#include "node_base.hpp"
-#include "write_work.hpp"
-
 #include "packet.hpp"
+#include "slab_allocator.hpp"
 
 #include <atomic>
 #include <mutex>
-#include <boost/make_unique.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/io_service.hpp>
 
 namespace dmn {
 
@@ -20,11 +18,16 @@ using netlink_write_ptr = std::unique_ptr<netlink_write_t>;
 class netlink_read_t {
 private:
     boost::asio::ip::tcp::socket socket_;
-    node_base_t& node_;
+    using on_error_t = std::function<void(netlink_read_t*, const boost::system::error_code&)>;
+    const on_error_t on_error_;
+
+    using on_data_t = std::function<void(packet_native_t&&)>;
+    const on_data_t on_data_;
 
     std::aligned_storage_t<sizeof(packet_native_t), alignof(packet_native_t)> network_in_holder_;
     packet_native_t  native_in_;
-    read_ticket_t ticket_;
+
+    slab_allocator_t slab_;
 
     netlink_read_t(netlink_read_t&&) = delete;
     netlink_read_t(const netlink_read_t&) = delete;
@@ -34,16 +37,23 @@ private:
     void process_and_async_read();
     void async_read_data();
     void async_read();
+    void process_error(const boost::system::error_code& e) {
+        on_error_(this, e);
+    }
 
-    netlink_read_t(node_base_t& node, boost::asio::ip::tcp::socket&& socket, read_ticket_t&& ticket);
+    netlink_read_t(boost::asio::ip::tcp::socket&& socket, on_error_t on_error, on_data_t on_data);
 
 public:
-    static netlink_read_ptr construct(node_base_t& node, boost::asio::ip::tcp::socket&& socket, read_ticket_t&& ticket) {
+    template <class OnError, class OnData>
+    static netlink_read_ptr construct(boost::asio::ip::tcp::socket&& socket, OnError&& on_error, OnData&& on_data) {
         return netlink_read_ptr{new netlink_read_t(
-            node, std::move(socket), std::move(ticket)
+            std::move(socket), std::forward<OnError>(on_error), std::forward<OnData>(on_data)
         )};
     }
 
+    void cancel() noexcept {
+        socket_.cancel();
+    }
 
     ~netlink_read_t();
 };
@@ -54,29 +64,42 @@ public:
 
 private:
     boost::asio::ip::tcp::socket socket_;
-    node_base_t& node_;
+    using on_error_t = std::function<void(netlink_write_t*, const boost::system::error_code&, guard_t&&)>;
+    const on_error_t on_error_;
+
+    using on_operation_finished_t = std::function<void(netlink_write_t*, guard_t&&)>;
+    const on_operation_finished_t on_operation_finished_;
+
     const boost::asio::ip::tcp::endpoint remote_ep_;
     std::aligned_storage_t<sizeof(packet_native_t), alignof(packet_native_t)> network_out_holder_;
 
     std::atomic<int> write_lock_ {0};
+
+
+    slab_allocator_t slab_;
 
     netlink_write_t(netlink_write_t&&) = delete;
     netlink_write_t(const netlink_write_t&) = delete;
     netlink_write_t& operator=(netlink_write_t&&) = delete;
     netlink_write_t& operator=(const netlink_write_t&) = delete;
 
-    void async_connect(guard_t&& g);
+    void process_error(const boost::system::error_code& e, guard_t&& g) {
+        on_error_(this, e, std::move(g));
+    }
 
-    netlink_write_t(node_base_t& node, const char* addr, unsigned short port);
+    netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished);
 
 public:
-    static netlink_write_ptr construct(node_base_t& node, const char* addr, unsigned short port) {
+    void async_connect(guard_t&& g);
+
+    template <class OnError, class OnFinish>
+    static netlink_write_ptr construct(const char* addr, unsigned short port, boost::asio::io_service& ios, OnError&& on_error, OnFinish&& on_operation_finished) {
         return netlink_write_ptr{new netlink_write_t(
-            node, addr, port
+            addr, port, ios, std::forward<OnError>(on_error), std::forward<OnFinish>(on_operation_finished)
         )};
     }
 
-    void async_send(write_ticket_t&& ticket, guard_t&& g, packet_native_t&& data);
+    void async_send(guard_t&& g, packet_native_t&& data);
 
     guard_t try_lock() noexcept;
     void unlock() noexcept;

@@ -3,32 +3,30 @@
 #include "node_base.hpp"
 #include "packet.hpp"
 #include "stream.hpp"
-#include "write_work.hpp"
+#include "work_counter.hpp"
 
 #include <boost/asio/io_service.hpp>
 
 namespace dmn {
 
 class node_impl_read_0: public virtual node_base_t {
-    void start(read_ticket_t&& ticket) {
-        ios().post([this, ticket = std::move(ticket)]() mutable {
-            const stop_enum state = on_packet_accept(write_counter_.ticket(), packet_native_t{});
-            if (state == stop_enum::RUN) {
-                start(std::move(ticket));
+    void start() {
+        ios().post([this]() {
+            on_packet_accept(packet_native_t{});
+            if (state() == node_state::RUN) {
+                start();
             } else {
-                if (ticket.release()->unlock_last()) {
-                    stop_writing();
-                }
+                no_more_readers(); // TODO: mutithreaded run
             }
         });
     }
 public:
     node_impl_read_0() {
-        start(read_counter_.ticket()); // TODO: mutithreaded run
+        start(); // TODO: mutithreaded run
     }
 
-    void stop_reading() override {
-        state_.store(stop_enum::STOPPING_READ, std::memory_order_relaxed);
+    void on_stop_reading() noexcept override final {
+        // Noop
     }
 
     ~node_impl_read_0() noexcept = default;

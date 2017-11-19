@@ -19,6 +19,7 @@ struct hosts_strong_t: private std::vector<std::pair<std::string, unsigned short
     using base_t::push_back;
     using base_t::empty;
     using base_t::swap;
+    using base_t::size;
 
     base_t& base() noexcept { return *this; }
     const base_t& base() const noexcept { return *this; }

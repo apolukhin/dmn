@@ -18,10 +18,6 @@ class packet_header_network_t {
 public:
     packet_header_network_t() = default;
     packet_header_network_t(packet_header_network_t&&) = default;
-    packet_header_network_t& operator=(packet_header_network_t&&) = default;
-
-    packet_header_network_t(const packet_header_network_t&) = delete;
-    packet_header_network_t& operator=(const packet_header_network_t&) = delete;
 
     explicit packet_header_network_t(packet_header_native_t&& n) noexcept;
     packet_header_native_t to_native() noexcept;
@@ -40,10 +36,6 @@ class packet_body_network_t {
 public:
     packet_body_network_t() = default;
     packet_body_network_t(packet_body_network_t&&) = default;
-    packet_body_network_t& operator=(packet_body_network_t&&) = default;
-
-    packet_body_network_t(const packet_body_network_t&) = delete;
-    packet_body_network_t& operator=(const packet_body_network_t&) = delete;
 
     explicit packet_body_network_t(packet_body_native_t&& n) noexcept;
     packet_body_native_t to_native() noexcept;
@@ -55,7 +47,7 @@ public:
         };
     }
     auto read_buffer() noexcept {
-        BOOST_ASSERT(!data_.empty());
+        // User may provide no data
         return boost::asio::const_buffers_1{
             data_.empty() ? boost::asio::const_buffer() : boost::asio::const_buffer(&data_[0], data_.size())
         };
@@ -77,7 +69,7 @@ struct packet_network_t {
             header_.to_native(),
             body_.to_native()
         };
-    }    
+    }
 
     std::array<boost::asio::const_buffer, 2> read_buffer() noexcept {
         return std::array<boost::asio::const_buffer, 2> {

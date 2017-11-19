@@ -22,6 +22,9 @@ struct packet_header_native_t {
 };
 
 struct packet_body_native_t {
+    packet_body_native_t() = default;
+    packet_body_native_t(packet_body_native_t&& ) = default;
+
     std::vector<unsigned char> data_;
 
     void add_data(const unsigned char* data, std::uint32_t size, const char* type) {
@@ -81,6 +84,17 @@ struct packet_body_native_t {
 struct packet_native_t {
     packet_header_native_t header_;
     packet_body_native_t   body_;
+
+    packet_native_t() = default;
+    packet_native_t(packet_native_t&& n) noexcept
+        : header_(std::move(n.header_))
+        , body_(std::move(n.body_))
+    {}
+
+    explicit packet_native_t(packet_header_native_t&& h, packet_body_native_t&& b) noexcept
+        : header_(std::move(h))
+        , body_(std::move(b))
+    {}
 };
 
 

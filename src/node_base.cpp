@@ -33,13 +33,10 @@ node_base_t::node_base_t(const graph_t& in, const char* node_id)
     , this_node(config[this_node_descriptor])
 {}
 
-stop_enum node_base_t::on_packet_accept(write_ticket_t&& write_ticket, packet_native_t&& packet) {
-    stop_enum stop_value = state_.load(std::memory_order_relaxed);
-    stream_t s{*this, std::move(packet), stop_value};
+packet_native_t node_base_t::call_callback(packet_native_t packet) noexcept {
+    stream_t s{*this, std::move(packet)};
     node_base_t::callback_(s);
-    on_packet_send(std::move(write_ticket), s.move_out_data());
-
-    return stop_value;
+    return s.move_out_data();
 }
 
 node_base_t::~node_base_t() noexcept = default;
@@ -56,10 +53,10 @@ struct node_in_x_out_x final: Read, Write {
         , Write()
     {}
 
-    using Read::on_packet_accept;
-    using Read::stop_reading;
-    using Write::on_packet_send;
-    using Write::stop_writing;
+    using Read::on_stop_reading;
+    using Write::on_packet_accept;
+    using Write::on_stop_reading;
+    using Write::on_stoped_writing;
 
     ~node_in_x_out_x() noexcept = default;
 };
