@@ -12,7 +12,7 @@ class node_impl_write_0: public virtual node_base_t {
 public:
     node_impl_write_0() {}
 
-    void on_packet_accept(packet_native_t packet) override final {
+    void on_packet_accept(packet_t packet) override final {
         pending_writes_.add();
 
         call_callback(std::move(packet));

@@ -10,16 +10,16 @@
 namespace dmn {
 
 namespace {
-    inline packet_network_t& netpacket(std::aligned_storage_t<sizeof(packet_native_t), alignof(packet_native_t)>& data) noexcept {
-        static_assert(sizeof(packet_native_t) == sizeof(packet_network_t), "");
-        static_assert(alignof(packet_native_t) == alignof(packet_network_t), "");
+    inline packet_network_t& netpacket(std::aligned_storage_t<sizeof(packet_t), alignof(packet_t)>& data) noexcept {
+        static_assert(sizeof(packet_t) == sizeof(packet_network_t), "");
+        static_assert(alignof(packet_t) == alignof(packet_network_t), "");
 
         return *reinterpret_cast<packet_network_t*>(
             &data
         );
     }
 
-    inline void netpacket_replace(std::aligned_storage_t<sizeof(packet_native_t), alignof(packet_native_t)>& data, packet_network_t val) noexcept {
+    inline void netpacket_replace(std::aligned_storage_t<sizeof(packet_t), alignof(packet_t)>& data, packet_network_t val) noexcept {
         netpacket(data).~packet_network_t();
         new (&data) packet_network_t(std::move(val));
     }
@@ -34,20 +34,19 @@ namespace {
 }
 
 void netlink_read_t::process_and_async_read() {
-    packet_native_t data { netpacket(network_in_holder_).to_native() };
+    packet_t data { std::move(netpacket(network_in_holder_)).to_native() };
     async_read();
 
     on_data_(std::move(data));
 }
 
 void netlink_read_t::async_read_data() {
-    if (!native_in_.header_.size) {
-        native_in_.body_.data_.clear();
+    if (!netpacket(network_in_holder_).body_size()) {
         process_and_async_read();
         return;
     }
 
-    const auto buf = netpacket(network_in_holder_).body_.write_buffer(native_in_.header_.size);
+    const auto buf = netpacket(network_in_holder_).body_mutable_buffer();
     boost::asio::async_read(
         socket_,
         buf,
@@ -58,7 +57,7 @@ void netlink_read_t::async_read_data() {
                     process_error(e);
                     return;
                 }
-                BOOST_ASSERT_MSG(bytes_read == native_in_.header_.size, "Wrong bytes read for data");
+                BOOST_ASSERT_MSG(bytes_read == netpacket(network_in_holder_).body_size(), "Wrong bytes read for data");
 
                 process_and_async_read();
             }
@@ -98,86 +97,79 @@ netlink_write_t::~netlink_write_t() {
 
 void netlink_write_t::async_connect(netlink_write_t::guard_t&& g) {
     BOOST_ASSERT(g);
+    auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
+        if (e) {
+            process_error(e, std::move(guard), packet_t{});
+            return;
+        }
+
+        set_socket_options(socket_);
+        on_operation_finished_(this, std::move(guard));
+    };
+
     socket_.async_connect(
         remote_ep_,
-        make_slab_alloc_handler(
-            slab_,
-            [guard = std::move(g), this](const boost::system::error_code& e) mutable {
-                if (e) {
-                    process_error(e, std::move(guard));
-                    return;
-                }
-
-                set_socket_options(socket_);
-                on_operation_finished_(this, std::move(guard));
-            }
-        )
+        make_slab_alloc_handler(slab_, std::move(on_connect))
     );
 }
 
 void netlink_read_t::async_read() {
     BOOST_ASSERT(socket_.is_open());
 
-    const auto buf = netpacket(network_in_holder_).header_.read_buffer();
+    const auto buf = netpacket(network_in_holder_).header_mutable_buffer();
+    auto on_read = [this](const boost::system::error_code& e, std::size_t bytes_read) {
+        if (e) {
+            process_error(e);
+            return;
+        }
+
+        BOOST_ASSERT_MSG(bytes_read == sizeof(packet_header_t), "Wrong bytes read for header");
+
+        switch (netpacket(network_in_holder_).packet_type()) {
+        case packet_types_enum::DATA:
+            async_read_data();
+            return;
+        case packet_types_enum::SHUTDOWN_GRACEFULLY: {
+            boost::system::error_code ignore;
+            socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignore);
+            return;
+        }
+        default:
+            BOOST_ASSERT_MSG(false, "Unknown packet type"); // TODO: log error, not assert
+            return;
+        };
+    };
+
     boost::asio::async_read(
         socket_,
         buf,
-        make_slab_alloc_handler(
-            slab_,
-            [this](const boost::system::error_code& e, std::size_t bytes_read) {
-                if (e) {
-                    process_error(e);
-                    return;
-                }
-
-                native_in_.header_ = netpacket(network_in_holder_).header_.to_native();
-                BOOST_ASSERT_MSG(bytes_read == sizeof(packet_header_network_t), "Wrong bytes read for header");
-
-                switch (native_in_.header_.packet_type) {
-                case packet_types_enum::DATA:
-                    async_read_data();
-                    return;
-                case packet_types_enum::SHUTDOWN_GRACEFULLY: {
-                    boost::system::error_code ignore;
-                    socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignore);
-                    return;
-                }
-                default:
-                    BOOST_ASSERT_MSG(false, "Unknown packet type"); // TODO: log error, not assert
-                    return;
-                };
-            }
-        )
+        make_slab_alloc_handler(slab_, std::move(on_read))
     );
 }
 
-void netlink_write_t::async_send(guard_t&& g, packet_native_t&& data) {
+void netlink_write_t::async_send(guard_t&& g, packet_t&& data) {
     BOOST_ASSERT(g);
     BOOST_ASSERT(g.mutex() == this);
     BOOST_ASSERT(socket_.is_open());
 
-    data.header_.packet_type = packet_types_enum::DATA;
-    data.header_.size = data.body_.data_.size();
-
     netpacket_replace(network_out_holder_, packet_network_t{std::move(data)});
-    auto buf = netpacket(network_out_holder_).read_buffer();
+    auto buf = netpacket(network_out_holder_).const_buffer();
 
     const std::size_t size = boost::asio::buffer_size(buf);
+
+    auto on_write = [guard = std::move(g), size, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
+        if (e) {
+            process_error(e, std::move(guard), std::move(netpacket(network_out_holder_)).to_native());
+            return;
+        }
+        BOOST_ASSERT_MSG(size == bytes_written, "Wrong bytes count written");
+        on_operation_finished_(this, std::move(guard));
+    };
 
     boost::asio::async_write(
         socket_,
         buf,
-        make_slab_alloc_handler(
-            slab_,
-            [guard = std::move(g), size, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
-                if (e) {
-                    process_error(e, std::move(guard));
-                    return;
-                }
-                BOOST_ASSERT_MSG(size == bytes_written, "Wrong bytes count written");
-                on_operation_finished_(this, std::move(guard));
-            }
-        )
+        make_slab_alloc_handler(slab_, std::move(on_write))
     );
 }
 

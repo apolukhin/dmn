@@ -21,11 +21,10 @@ private:
     using on_error_t = std::function<void(netlink_read_t*, const boost::system::error_code&)>;
     const on_error_t on_error_;
 
-    using on_data_t = std::function<void(packet_native_t&&)>;
+    using on_data_t = std::function<void(packet_t&&)>;
     const on_data_t on_data_;
 
-    std::aligned_storage_t<sizeof(packet_native_t), alignof(packet_native_t)> network_in_holder_;
-    packet_native_t  native_in_;
+    std::aligned_storage_t<sizeof(packet_t), alignof(packet_t)> network_in_holder_;
 
     slab_allocator_t slab_;
 
@@ -64,14 +63,14 @@ public:
 
 private:
     boost::asio::ip::tcp::socket socket_;
-    using on_error_t = std::function<void(netlink_write_t*, const boost::system::error_code&, guard_t&&)>;
+    using on_error_t = std::function<void(netlink_write_t*, const boost::system::error_code&, guard_t&&, packet_t&&)>;
     const on_error_t on_error_;
 
     using on_operation_finished_t = std::function<void(netlink_write_t*, guard_t&&)>;
     const on_operation_finished_t on_operation_finished_;
 
     const boost::asio::ip::tcp::endpoint remote_ep_;
-    std::aligned_storage_t<sizeof(packet_native_t), alignof(packet_native_t)> network_out_holder_;
+    std::aligned_storage_t<sizeof(packet_t), alignof(packet_t)> network_out_holder_;
 
     std::atomic<int> write_lock_ {0};
 
@@ -83,8 +82,8 @@ private:
     netlink_write_t& operator=(netlink_write_t&&) = delete;
     netlink_write_t& operator=(const netlink_write_t&) = delete;
 
-    void process_error(const boost::system::error_code& e, guard_t&& g) {
-        on_error_(this, e, std::move(g));
+    void process_error(const boost::system::error_code& e, guard_t&& g, packet_t&& data) {
+        on_error_(this, e, std::move(g), std::move(data));
     }
 
     netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished);
@@ -99,7 +98,7 @@ public:
         )};
     }
 
-    void async_send(guard_t&& g, packet_native_t&& data);
+    void async_send(guard_t&& g, packet_t&& data);
 
     guard_t try_lock() noexcept;
     void unlock() noexcept;

@@ -9,74 +9,36 @@
 
 namespace dmn {
 
-class packet_header_network_t {
-    std::uint16_t       version = 1;
-    packet_types_enum   packet_type = packet_types_enum::DATA;
-    wave_id_t           wave_id; // TODO:
-    std::uint32_t       size = 0;
-
+class packet_network_t: private packet_t {
 public:
-    packet_header_network_t() = default;
-    packet_header_network_t(packet_header_network_t&&) = default;
-
-    explicit packet_header_network_t(packet_header_native_t&& n) noexcept;
-    packet_header_native_t to_native() noexcept;
-    auto read_buffer() noexcept {
-        return boost::asio::buffer(reinterpret_cast<unsigned char*>(this), sizeof(packet_header_network_t));
-    }
-
-    auto write_buffer() noexcept {
-        return boost::asio::buffer(reinterpret_cast<unsigned char*>(this), sizeof(packet_header_network_t));
-    }
-};
-
-class packet_body_network_t {
-    std::vector<unsigned char> data_;
-
-public:
-    packet_body_network_t() = default;
-    packet_body_network_t(packet_body_network_t&&) = default;
-
-    explicit packet_body_network_t(packet_body_native_t&& n) noexcept;
-    packet_body_native_t to_native() noexcept;
-
-    auto write_buffer(std::size_t size) {
-        data_.resize(size);
-        return boost::asio::mutable_buffers_1{
-            data_.empty() ? boost::asio::mutable_buffer() : boost::asio::mutable_buffer(&data_[0], data_.size())
-        };
-    }
-    auto read_buffer() noexcept {
-        // User may provide no data
-        return boost::asio::const_buffers_1{
-            data_.empty() ? boost::asio::const_buffer() : boost::asio::const_buffer(&data_[0], data_.size())
-        };
-    }
-};
-
-struct packet_network_t {
-    packet_header_network_t header_;
-    packet_body_network_t   body_;
-
     packet_network_t() = default;
-    explicit packet_network_t(packet_native_t&& n) noexcept
-        : header_(std::move(n.header_))
-        , body_(std::move(n.body_))
-    {}
+    explicit packet_network_t(packet_t&& n) noexcept;
 
-    packet_native_t to_native() noexcept {
-        return packet_native_t{
-            header_.to_native(),
-            body_.to_native()
+    auto header_const_buffer() noexcept {
+        return boost::asio::const_buffers_1(reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t));
+    }
+    auto header_mutable_buffer() noexcept {
+        place_header();
+        return boost::asio::mutable_buffers_1(reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t));
+    }
+
+    auto body_mutable_buffer() {
+        data_.resize(body_size() + sizeof(packet_header_t));
+        return boost::asio::mutable_buffers_1{
+            boost::asio::mutable_buffer(data_.data() + sizeof(packet_header_t), body_size())
         };
     }
 
-    std::array<boost::asio::const_buffer, 2> read_buffer() noexcept {
-        return std::array<boost::asio::const_buffer, 2> {
-            *header_.read_buffer().begin(),
-            *body_.read_buffer().begin()
+    boost::asio::const_buffers_1 const_buffer() noexcept {
+        return boost::asio::const_buffers_1{
+            data_.data(), data_.size()
         };
     }
+
+    packet_types_enum packet_type() const noexcept;
+    std::uint32_t body_size() const noexcept;
+    using packet_t::clear;
+    packet_t to_native() && noexcept;
 };
 
 

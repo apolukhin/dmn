@@ -28,12 +28,12 @@ BOOST_AUTO_TEST_CASE(make_nodes_base) {
     )"};
 
     std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a");
+    auto node_a = dmn::make_node(ss, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
     ss.str(g);
-    auto node_b = dmn::make_node(ss, "b");
+    auto node_b = dmn::make_node(ss, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -55,19 +55,19 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_base) {
     )"};
 
     std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a");
+    auto node_a = dmn::make_node(ss, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
     ss.str(g);
-    auto node_b = dmn::make_node(ss, "b");
+    auto node_b = dmn::make_node(ss, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
     ss.str(g);
-    auto node_c = dmn::make_node(ss, "c");
+    auto node_c = dmn::make_node(ss, "c", 0);
     BOOST_TEST(!!node_c);
     node_c->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -91,26 +91,26 @@ BOOST_AUTO_TEST_CASE(make_nodes_long_chain_base) {
     )"};
 
     std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a");
+    auto node_a = dmn::make_node(ss, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
     ss.str(g);
-    auto node_b = dmn::make_node(ss, "b");
+    auto node_b = dmn::make_node(ss, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
     ss.str(g);
-    auto node_c = dmn::make_node(ss, "c");
+    auto node_c = dmn::make_node(ss, "c", 0);
     BOOST_TEST(!!node_c);
     node_c->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
     ss.str(g);
-    auto node_d = dmn::make_node(ss, "d");
+    auto node_d = dmn::make_node(ss, "d", 0);
     BOOST_TEST(!!node_d);
     node_d->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -174,12 +174,12 @@ BOOST_AUTO_TEST_CASE(make_nodes_end_to_end) {
     )"};
 
     std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a");
+    auto node_a = dmn::make_node(ss, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = generate_sequence;
 
     ss.str(g);
-    auto node_b = dmn::make_node(ss, "b");
+    auto node_b = dmn::make_node(ss, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = remember_sequence;
 
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
 
     auto make_node = [g](const char* name, auto callback) {
         std::stringstream ss{g};
-        auto node = dmn::make_node(ss, name);
+        auto node = dmn::make_node(ss, name, 0);
         BOOST_TEST(!!node);
         node->callback_ = callback;
         return node;

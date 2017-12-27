@@ -27,13 +27,14 @@ namespace {
     }
 }
 
-node_base_t::node_base_t(const graph_t& in, const char* node_id)
+node_base_t::node_base_t(const graph_t& in, const char* node_id, std::uint16_t host_id)
     : config(in)
     , this_node_descriptor(get_this_node_descriptor(config, node_id))
     , this_node(config[this_node_descriptor])
+    , host_id_(host_id)
 {}
 
-packet_native_t node_base_t::call_callback(packet_native_t packet) noexcept {
+packet_t node_base_t::call_callback(packet_t packet) noexcept {
     stream_t s{*this, std::move(packet)};
     node_base_t::callback_(s);
     return s.move_out_data();
@@ -47,8 +48,8 @@ node_base_t::~node_base_t() noexcept = default;
 
 template <class Read, class Write>
 struct node_in_x_out_x final: Read, Write {
-    node_in_x_out_x(const graph_t& in, const char* node_id)
-        : node_base_t(in, node_id)
+    node_in_x_out_x(const graph_t& in, const char* node_id, std::uint16_t host_id)
+        : node_base_t(in, node_id, host_id)
         , Read()
         , Write()
     {}
@@ -65,7 +66,7 @@ using node_in_1_out_0 = node_in_x_out_x<node_impl_read_1, node_impl_write_0>;
 using node_in_0_out_1 = node_in_x_out_x<node_impl_read_0, node_impl_write_1>;
 using node_in_1_out_1 = node_in_x_out_x<node_impl_read_1, node_impl_write_1>;
 
-std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id) {
+std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, std::uint16_t host_id) {
     const graph_t graph = load_graph(in);
     const auto this_node_descriptor = get_this_node_descriptor(graph, node_id);
 
@@ -96,9 +97,9 @@ std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id) {
     );
 
     switch(type) {
-    case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(graph, node_id);
-    case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(graph, node_id);
-    case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(graph, node_id);
+    case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(graph, node_id, host_id);
+    case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(graph, node_id, host_id);
+    case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(graph, node_id, host_id);
     default:
         BOOST_ASSERT(false);
     }

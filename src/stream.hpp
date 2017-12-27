@@ -10,14 +10,17 @@ namespace dmn {
 class stream_t {
     node_base_t& node_;
 
-    packet_native_t in_data_;
-    packet_native_t out_data_;
+    packet_t in_data_;
+    packet_t out_data_;
 
 public:
-    explicit stream_t(node_base_t& node, packet_native_t&& in_data)
+    explicit stream_t(node_base_t& node, packet_t&& in_data)
         : node_(node)
         , in_data_(std::move(in_data))
-    {}
+    {
+        out_data_.place_header();
+        out_data_.header().wave_id = in_data_.header().wave_id;
+    }
 
     void stop() {
         node_.shutdown_gracefully();
@@ -27,7 +30,7 @@ public:
         return node_.state() != node_state::RUN;
     }
 
-    packet_native_t&& move_out_data() noexcept {
+    packet_t&& move_out_data() noexcept {
         return std::move(out_data_);
     }
 
@@ -35,14 +38,14 @@ public:
         if (!type) {
             type = "";
         }
-        out_data_.body_.add_data(static_cast<const unsigned char*>(data), size, type);
+        out_data_.add_data(static_cast<const unsigned char*>(data), size, type);
     }
 
     std::pair<const void*, std::size_t> get_data(const char* type) const noexcept {
         if (!type) {
             type = "";
         }
-        return { in_data_.body_.get_data(type) };
+        return { in_data_.get_data(type) };
     }
 };
 

@@ -67,7 +67,7 @@ public:
             ios(),
             boost::asio::ip::tcp::endpoint(
                 boost::asio::ip::address::from_string(
-                    config[this_node_descriptor].hosts.front().first.c_str() // TODO: not only front()!
+                    config[this_node_descriptor].hosts[host_id_].first.c_str()
                 ),
                 config[this_node_descriptor].hosts.front().second
             )

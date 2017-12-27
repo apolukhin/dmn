@@ -37,19 +37,10 @@ void shutdown_nodes(Node&& node, Nodes&&... nodes) {
     detail::shutdown_nodes_impl(std::forward<Nodes>(nodes)...);
 }
 
-inline dmn::packet_native_t clone(const dmn::packet_native_t& orig) {
-    dmn::packet_native_t cloned{
-        dmn::packet_header_native_t{orig.header_},
-        {}
+inline dmn::packet_t clone(const dmn::packet_t& orig) {
+    dmn::packet_t cloned{
+        dmn::packet_storage_t{orig.raw_storage()}
     };
-
-    cloned.body_.data_ = orig.body_.data_;
-    return cloned;
-}
-
-inline dmn::packet_body_native_t clone(const dmn::packet_body_native_t& orig) {
-    dmn::packet_body_native_t cloned{};
-    cloned.data_ = orig.data_;
     return cloned;
 }
 

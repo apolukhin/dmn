@@ -39,6 +39,7 @@ add_library(dmn_core STATIC
     src/netlink.hpp
     src/netlink.cpp
     src/packet.hpp
+    src/packet.cpp
     src/packet_network.hpp
     src/packet_network.cpp
     src/stream.hpp

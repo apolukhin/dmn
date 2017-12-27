@@ -14,87 +14,56 @@ enum class packet_types_enum: std::uint16_t {
 
 enum class wave_id_t : std::uint32_t {};
 
-struct packet_header_native_t {
+struct packet_header_t {
     std::uint16_t       version = 1;
     packet_types_enum   packet_type = packet_types_enum::DATA;
     wave_id_t           wave_id; // TODO:
     std::uint32_t       size = 0;
 };
 
-struct packet_body_native_t {
-    packet_body_native_t() = default;
-    packet_body_native_t(packet_body_native_t&& ) = default;
+using packet_storage_t = std::vector<unsigned char>;
 
-    std::vector<unsigned char> data_;
+class packet_t {
+protected:
+    packet_storage_t data_;
 
-    void add_data(const unsigned char* data, std::uint32_t size, const char* type) {
-        BOOST_ASSERT(type);
-        constexpr auto range = [](const std::uint32_t& v) noexcept {
-            return std::make_pair(
-                reinterpret_cast<const unsigned char*>(&v),
-                reinterpret_cast<const unsigned char*>(&v) + sizeof(v)
-            );
-        };
 
-        const std::uint32_t type_len = std::strlen(type);
-        data_.reserve(
-            (
-                data_.size()
-                + sizeof(std::uint32_t) + type_len + sizeof(std::uint32_t) + size
-                + 63
-            ) % 64
-        );
-        data_.insert(data_.end(), range(type_len).first, range(type_len).second);
-        data_.insert(data_.end(), type, type + type_len);
-        data_.insert(data_.end(), range(size).first, range(size).second);
-        data_.insert(data_.end(), data, data + size);
+    void clear() noexcept {
+        data_.clear();
+    }
+public:
+
+    void place_header();
+
+    bool empty() const noexcept {
+        return data_.empty();
     }
 
-    std::pair<const unsigned char*, std::size_t> get_data(const char* type) const noexcept {
-        BOOST_ASSERT(type);
-        const std::uint32_t type_len = std::strlen(type);
-        const unsigned char* data = data_.data();
-        const unsigned char* const data_end = data + data_.size();
+    void add_data(const unsigned char* data, std::uint32_t size, const char* type);
+    std::pair<const unsigned char*, std::size_t> get_data(const char* type) const noexcept;
 
-        while (data != data_end) {
-            std::uint32_t current_type_len; // intentionally unintialized
-            std::memcpy(&current_type_len, data, sizeof(std::uint32_t));
-            data += sizeof(std::uint32_t);
-            BOOST_ASSERT(data < data_end);
+    packet_t() = default;
+    explicit packet_t(packet_storage_t&& storage) noexcept
+        : data_(std::move(storage))
+    {}
 
-            const bool found = (current_type_len == type_len && !std::memcmp(data, type, type_len));
-            data += current_type_len;
-            BOOST_ASSERT(data < data_end);
-
-            std::uint32_t current_data_len; // intentionally unintialized
-            std::memcpy(&current_data_len, data, sizeof(std::uint32_t));
-            data += sizeof(std::uint32_t);
-            BOOST_ASSERT(data < data_end);
-
-            if (found) {
-                return {data, current_data_len};
-            }
-            data += current_data_len;
-        }
-
-        return { nullptr, 0u };
+    const packet_storage_t& raw_storage() const noexcept {
+        return data_;
     }
-};
 
-struct packet_native_t {
-    packet_header_native_t header_;
-    packet_body_native_t   body_;
-
-    packet_native_t() = default;
-    packet_native_t(packet_native_t&& n) noexcept
-        : header_(std::move(n.header_))
-        , body_(std::move(n.body_))
+    packet_t(packet_t&& n) noexcept
+        : data_(std::move(n.data_))
     {}
 
-    explicit packet_native_t(packet_header_native_t&& h, packet_body_native_t&& b) noexcept
-        : header_(std::move(h))
-        , body_(std::move(b))
-    {}
+    packet_header_t& header() noexcept {
+        BOOST_ASSERT(!data_.empty());
+        return *reinterpret_cast<packet_header_t*>(data_.data());
+    }
+
+    const packet_header_t& header() const noexcept {
+        BOOST_ASSERT(!data_.empty());
+        return *reinterpret_cast<const packet_header_t*>(data_.data());
+    }
 };
 
 

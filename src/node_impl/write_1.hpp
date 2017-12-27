@@ -14,7 +14,7 @@ class node_impl_write_1: public virtual node_base_t {
     std::mutex                      netlinks_mutex_;
     std::deque<netlink_write_ptr>   netlinks_;
 
-    silent_mt_queue<packet_native_t> data_to_send_;
+    silent_mt_queue<packet_t> data_to_send_;
 
     netlink_write_t::guard_t try_get_netlink() {
         std::unique_lock<std::mutex> guard(netlinks_mutex_);
@@ -28,7 +28,11 @@ class node_impl_write_1: public virtual node_base_t {
         return {};
     }
 
-    void on_error(netlink_write_t* link, const boost::system::error_code& e, netlink_write_t::guard_t&& guard) {
+    void on_error(netlink_write_t* link, const boost::system::error_code& e, netlink_write_t::guard_t&& guard, dmn::packet_t&& p) {
+        if (!p.empty()) {
+            data_to_send_.silent_push_front(std::move(p));
+        }
+
         if (state() == node_state::RUN) {
             link->async_connect(std::move(guard)); // TODO: dealy?
             return;
@@ -74,7 +78,7 @@ public:
                 host.first.c_str(),
                 host.second,
                 ios(),
-                [this](auto* link, const auto& e, auto&& guard) { on_error(link, e, std::move(guard)); },
+                [this](auto* link, const auto& e, auto&& guard, dmn::packet_t&& p) { on_error(link, e, std::move(guard), std::move(p)); },
                 [this](auto* link, auto&& guard) { on_operation_finished(link, std::move(guard)); }
             ));
         }
@@ -94,10 +98,10 @@ public:
         netlinks_.clear();
     }
 
-    void on_packet_accept(packet_native_t packet) override final {
+    void on_packet_accept(packet_t packet) override final {
         pending_writes_.add();
 
-        packet_native_t data = call_callback(std::move(packet));
+        packet_t data = call_callback(std::move(packet));
 
         data_to_send_.silent_push(std::move(data));
 

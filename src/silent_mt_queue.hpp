@@ -14,6 +14,7 @@ class alignas(hardware_destructive_interference_size) silent_mt_queue {
 
 public:
     inline void silent_push(T value);
+    inline void silent_push_front(T value);
 
     boost::optional<T> try_pop() {
         boost::optional<T> ret;
@@ -27,7 +28,6 @@ public:
         }
 
         return ret;
-
     }
 };
 
@@ -38,6 +38,16 @@ void silent_mt_queue<T>::silent_push(T value) {
 
     std::lock_guard<std::mutex> lock(data_mutex_);
     data_.push_back(std::move(value));
+}
+
+
+template <class T>
+void silent_mt_queue<T>::silent_push_front(T value) {
+    // TODO: deal with that by using intrusive slist
+    //static_assert(sizeof(silent_mt_queue<T>) <= hardware_constructive_interference_size, "");
+
+    std::lock_guard<std::mutex> lock(data_mutex_);
+    data_.push_front(std::move(value));
 }
 
 }

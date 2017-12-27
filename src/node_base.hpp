@@ -18,6 +18,7 @@ public:
     const graph_t config;
     const boost::graph_traits<graph_t>::vertex_descriptor this_node_descriptor;
     const vertex_t& this_node;
+    const std::uint16_t host_id_;
 
     const boost::dll::shared_library lib;
 
@@ -25,13 +26,13 @@ public:
     callback_t callback_ = nullptr;
 
     // Functions:
-    node_base_t(const graph_t& in, const char* node_id);
+    node_base_t(const graph_t& in, const char* node_id, std::uint16_t host_id);
 
-    virtual void on_packet_accept(packet_native_t packet) = 0;
-    packet_native_t call_callback(packet_native_t packet) noexcept;
+    virtual void on_packet_accept(packet_t packet) = 0;
+    packet_t call_callback(packet_t packet) noexcept;
     virtual ~node_base_t() noexcept;
 };
 
-std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id);
+std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, std::uint16_t host_id);
 
 }
