@@ -1,5 +1,6 @@
 #include "netlink.hpp"
 #include "node.hpp"
+#include "packet_network.hpp"
 #include <numeric>
 
 #include <boost/test/unit_test.hpp>
@@ -17,6 +18,8 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
     boost::asio::ip::tcp::socket    new_socket{dmn::node_t::ios()};
     const dmn::packet_t ethalon = tests::clone(packet);
     dmn::netlink_read_ptr           netlink_in;
+
+    dmn::packet_network_t packet_network{std::move(packet)};
 
     bool sended = false;
     int received = 0;
@@ -41,14 +44,14 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
 
 
     dmn::netlink_write_ptr netlink_out = dmn::netlink_write_t::construct("127.0.0.1", 63101, dmn::node_t::ios(),
-        [&](dmn::netlink_write_t* l, const boost::system::error_code&, auto&& g, dmn::packet_t&&) {
+        [&](dmn::netlink_write_t* l, const boost::system::error_code&, auto&& g) {
             BOOST_TEST(l == netlink_out.get());
             l->async_connect(std::move(g));
         },
         [&](dmn::netlink_write_t* l, auto g) {
             if (sended) return;
             sended = true;
-            netlink_out->async_send(std::move(g), std::move(packet));
+            netlink_out->async_send(std::move(g), packet_network.const_buffer());
         }
     );
 

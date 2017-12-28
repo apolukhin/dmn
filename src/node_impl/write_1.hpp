@@ -6,47 +6,109 @@
 #include "work_counter.hpp"
 
 #include <mutex>
+#include <vector>
+
+
+#include "packet_network.hpp"
 
 namespace dmn {
 
-class node_impl_write_1: public virtual node_base_t {
-    work_counter_t                  pending_writes_;
-    std::mutex                      netlinks_mutex_;
-    std::deque<netlink_write_ptr>   netlinks_;
+struct netlink_with_packet {
+    netlink_write_ptr link;
+    packet_network_t packet;
+};
 
-    silent_mt_queue<packet_t> data_to_send_;
+inline bool operator<(const netlink_with_packet& lhs, const netlink_write_t* rhs) noexcept {
+    return lhs.link.get() < rhs;
+}
 
-    netlink_write_t::guard_t try_get_netlink() {
-        std::unique_lock<std::mutex> guard(netlinks_mutex_);
-        for (auto& link: netlinks_) {   // TODO: balancing
-            netlink_write_t::guard_t lock = link->try_lock();
-            if (lock) {
-                return lock;
-            }
-        }
+inline bool operator<(const netlink_with_packet& lhs, const netlink_with_packet& rhs) noexcept {
+    return lhs.link.get() < rhs.link.get();
+}
 
-        return {};
+inline bool operator<(const netlink_write_t* lhs, const netlink_with_packet& rhs) noexcept {
+    return lhs < rhs.link.get();
+}
+
+struct edges_out_t {
+    std::mutex                                                  netlinks_mutex_;
+    std::vector<netlink_with_packet>                            netlinks_;
+    silent_mt_queue<packet_network_t>                           data_to_send_;
+
+    auto find_netlink(netlink_write_t* link, std::unique_lock<std::mutex>& /*guard*/) {
+        const auto pair = std::equal_range(netlinks_.begin(), netlinks_.end(), link);
+        BOOST_ASSERT(pair.second - pair.first == 1);
+        return pair.first;
     }
 
-    void on_error(netlink_write_t* link, const boost::system::error_code& e, netlink_write_t::guard_t&& guard, dmn::packet_t&& p) {
-        if (!p.empty()) {
-            data_to_send_.silent_push_front(std::move(p));
-        }
+    void try_send() {
+        std::unique_lock<std::mutex> guard(netlinks_mutex_);
+        for (auto& v: netlinks_) {   // TODO: balancing
+            netlink_write_t::guard_t lock = v.link->try_lock();
+            if (!lock) {
+                continue;
+            }
 
-        if (state() == node_state::RUN) {
-            link->async_connect(std::move(guard)); // TODO: dealy?
+            auto p = data_to_send_.try_pop();
+            if (!p) {
+                return;
+            }
+            v.packet = std::move(*p);
+
+            auto* connection = v.link.get();
+            auto buf = v.packet.const_buffer();
+            guard.unlock();
+
+            connection->async_send(std::move(lock), buf);
+            break;
+        }
+    }
+
+    void try_steal_work(netlink_write_t* link, netlink_write_t::guard_t&& guard) {
+        // Work stealing
+        auto v = data_to_send_.try_pop();
+        if (!v) {
             return;
         }
 
         std::unique_lock<std::mutex> g(netlinks_mutex_);
-        auto it = std::find_if(netlinks_.begin(), netlinks_.end(), [link](auto& v){
-            return v.get() == link;
-        });
-        BOOST_ASSERT(it != netlinks_.end());
+        auto it = find_netlink(link, g);
+        it->packet = std::move(*v);
+        auto buf = it->packet.const_buffer();
+        g.unlock();
 
+        link->async_send(std::move(guard), buf);
+    }
+};
+
+class node_impl_write_1: public virtual node_base_t, private edges_out_t {
+    work_counter_t                  pending_writes_;    
+
+    void on_error(netlink_write_t* link, const boost::system::error_code& e, netlink_write_t::guard_t&& guard) {
+        if (state() == node_state::RUN) {
+            std::unique_lock<std::mutex> g(netlinks_mutex_);
+            auto it = find_netlink(link, g);
+            auto p = std::move(it->packet);
+            g.unlock();
+
+            if (!p.empty()) {
+                data_to_send_.silent_push_front(std::move(p));
+            }
+
+            link->async_connect(std::move(guard)); // TODO: dealy?
+            try_send();
+            return;
+        }
+
+        std::unique_lock<std::mutex> g(netlinks_mutex_);
+        auto it = find_netlink(link, g);
         auto l = std::move(*it);
         netlinks_.erase(it);
         g.unlock();
+
+        if (!l.packet.empty()) {
+            data_to_send_.silent_push_front(std::move(l.packet));
+        }
 
         guard.unlock();
         (void)l; // TODO: log issue
@@ -55,11 +117,7 @@ class node_impl_write_1: public virtual node_base_t {
     void on_operation_finished(netlink_write_t* link, netlink_write_t::guard_t&& guard) {
         pending_writes_.remove();
 
-        // Work stealing
-        auto v = data_to_send_.try_pop();
-        if (v) {
-            link->async_send(std::move(guard), std::move(*v));
-        }
+        try_steal_work(link, std::move(guard));
     }
 
 public:
@@ -74,14 +132,19 @@ public:
 
         pending_writes_.add(out_vertex.hosts.size());
         for (const auto& host : out_vertex.hosts) {
-            netlinks_.emplace_back(netlink_write_t::construct(
+
+            auto link = netlink_write_t::construct(
                 host.first.c_str(),
                 host.second,
                 ios(),
-                [this](auto* link, const auto& e, auto&& guard, dmn::packet_t&& p) { on_error(link, e, std::move(guard), std::move(p)); },
+                [this](auto* link, const auto& e, auto&& guard) { on_error(link, e, std::move(guard)); },
                 [this](auto* link, auto&& guard) { on_operation_finished(link, std::move(guard)); }
-            ));
+            );
+            auto* link_ptr = link.get();
+            netlinks_.emplace_back(netlink_with_packet{std::move(link), packet_network_t{}});
         }
+
+        std::sort(netlinks_.begin(), netlinks_.end());
     }
 
     void on_stop_writing() noexcept override final {
@@ -103,19 +166,10 @@ public:
 
         packet_t data = call_callback(std::move(packet));
 
-        data_to_send_.silent_push(std::move(data));
+        data_to_send_.silent_push(packet_network_t{std::move(data)});
 
         // Rechecking for case when write operation was finished before we pushed into the data_to_send_
-        auto l = try_get_netlink();
-        if (l) {
-            auto v = data_to_send_.try_pop();
-            if (!v) {
-                return;
-            }
-
-            auto& link = *l.mutex();
-            link.async_send(std::move(l), std::move(*v));
-        }
+        try_send();
     }
 
     ~node_impl_write_1() noexcept = default;

@@ -63,15 +63,13 @@ public:
 
 private:
     boost::asio::ip::tcp::socket socket_;
-    using on_error_t = std::function<void(netlink_write_t*, const boost::system::error_code&, guard_t&&, packet_t&&)>;
+    using on_error_t = std::function<void(netlink_write_t*, const boost::system::error_code&, guard_t&&)>;
     const on_error_t on_error_;
 
     using on_operation_finished_t = std::function<void(netlink_write_t*, guard_t&&)>;
     const on_operation_finished_t on_operation_finished_;
 
     const boost::asio::ip::tcp::endpoint remote_ep_;
-    std::aligned_storage_t<sizeof(packet_t), alignof(packet_t)> network_out_holder_;
-
     std::atomic<int> write_lock_ {0};
 
 
@@ -82,8 +80,8 @@ private:
     netlink_write_t& operator=(netlink_write_t&&) = delete;
     netlink_write_t& operator=(const netlink_write_t&) = delete;
 
-    void process_error(const boost::system::error_code& e, guard_t&& g, packet_t&& data) {
-        on_error_(this, e, std::move(g), std::move(data));
+    void process_error(const boost::system::error_code& e, guard_t&& g) {
+        on_error_(this, e, std::move(g));
     }
 
     netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished);
@@ -98,7 +96,7 @@ public:
         )};
     }
 
-    void async_send(guard_t&& g, packet_t&& data);
+    void async_send(guard_t&& g, boost::asio::const_buffers_1 data);
 
     guard_t try_lock() noexcept;
     void unlock() noexcept;

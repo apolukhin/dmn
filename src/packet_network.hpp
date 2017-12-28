@@ -12,6 +12,8 @@ namespace dmn {
 class packet_network_t: private packet_t {
 public:
     packet_network_t() = default;
+    packet_network_t(packet_network_t&&) = default;
+    packet_network_t& operator=(packet_network_t&&) = default;
     explicit packet_network_t(packet_t&& n) noexcept;
 
     auto header_const_buffer() noexcept {
@@ -29,7 +31,7 @@ public:
         };
     }
 
-    boost::asio::const_buffers_1 const_buffer() noexcept {
+    boost::asio::const_buffers_1 const_buffer() const noexcept {
         return boost::asio::const_buffers_1{
             data_.data(), data_.size()
         };
@@ -38,6 +40,7 @@ public:
     packet_types_enum packet_type() const noexcept;
     std::uint32_t body_size() const noexcept;
     using packet_t::clear;
+    using packet_t::empty;
     packet_t to_native() && noexcept;
 };
 

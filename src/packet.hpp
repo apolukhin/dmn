@@ -43,6 +43,9 @@ public:
     std::pair<const unsigned char*, std::size_t> get_data(const char* type) const noexcept;
 
     packet_t() = default;
+    packet_t(packet_t&& ) noexcept = default;
+    packet_t& operator=(packet_t&&) noexcept = default;
+
     explicit packet_t(packet_storage_t&& storage) noexcept
         : data_(std::move(storage))
     {}
@@ -51,9 +54,6 @@ public:
         return data_;
     }
 
-    packet_t(packet_t&& n) noexcept
-        : data_(std::move(n.data_))
-    {}
 
     packet_header_t& header() noexcept {
         BOOST_ASSERT(!data_.empty());

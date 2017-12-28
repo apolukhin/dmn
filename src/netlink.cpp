@@ -82,8 +82,6 @@ netlink_write_t::netlink_write_t(const char* addr, unsigned short port, boost::a
     , on_operation_finished_(std::move(on_operation_finished))
     , remote_ep_{boost::asio::ip::address::from_string(addr), port}
 {
-    new (&network_out_holder_) packet_network_t();
-
     async_connect(try_lock());
 }
 
@@ -91,15 +89,13 @@ netlink_read_t::~netlink_read_t() {
     netpacket(network_in_holder_).~packet_network_t();
 }
 
-netlink_write_t::~netlink_write_t() {
-    netpacket(network_out_holder_).~packet_network_t();
-}
+netlink_write_t::~netlink_write_t() = default;
 
 void netlink_write_t::async_connect(netlink_write_t::guard_t&& g) {
     BOOST_ASSERT(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
         if (e) {
-            process_error(e, std::move(guard), packet_t{});
+            process_error(e, std::move(guard));
             return;
         }
 
@@ -147,19 +143,16 @@ void netlink_read_t::async_read() {
     );
 }
 
-void netlink_write_t::async_send(guard_t&& g, packet_t&& data) {
+void netlink_write_t::async_send(guard_t&& g, boost::asio::const_buffers_1 buf) {
     BOOST_ASSERT(g);
     BOOST_ASSERT(g.mutex() == this);
     BOOST_ASSERT(socket_.is_open());
-
-    netpacket_replace(network_out_holder_, packet_network_t{std::move(data)});
-    auto buf = netpacket(network_out_holder_).const_buffer();
 
     const std::size_t size = boost::asio::buffer_size(buf);
 
     auto on_write = [guard = std::move(g), size, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
-            process_error(e, std::move(guard), std::move(netpacket(network_out_holder_)).to_native());
+            process_error(e, std::move(guard));
             return;
         }
         BOOST_ASSERT_MSG(size == bytes_written, "Wrong bytes count written");
