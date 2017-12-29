@@ -1,9 +1,9 @@
 #pragma once
 
 #include "node_base.hpp"
-#include "packet.hpp"
 #include "stream.hpp"
-#include "work_counter.hpp"
+#include "impl/packet.hpp"
+#include "impl/work_counter.hpp"
 
 #include <boost/asio/io_service.hpp>
 

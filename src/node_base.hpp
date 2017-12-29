@@ -2,8 +2,8 @@
 
 #include "node.hpp"
 #include "load_graph.hpp"
-#include "packet.hpp"
-#include "state_tracker.hpp"
+#include "impl/packet.hpp"
+#include "impl/state_tracker.hpp"
 
 #include <memory>
 #include <atomic>
@@ -14,6 +14,8 @@ namespace dmn {
 struct stream_t;
 
 class node_base_t: public node_t, public state_tracker_t {
+    DMN_PINNED(node_base_t);
+
 public:
     const graph_t config;
     const boost::graph_traits<graph_t>::vertex_descriptor this_node_descriptor;

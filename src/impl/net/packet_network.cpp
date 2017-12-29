@@ -16,8 +16,12 @@ packet_types_enum packet_network_t::packet_type() const noexcept {
     return header().packet_type;
 }
 
-std::uint32_t packet_network_t::body_size() const noexcept {
+std::uint32_t packet_network_t::expected_body_size() const noexcept {
     return header().size;
+}
+
+std::uint32_t packet_network_t::actual_body_size() const noexcept {
+    return data_.size() > sizeof(header()) ? data_.size() - sizeof(header()) : 0;
 }
 
 

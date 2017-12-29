@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utility.hpp"
 #include <new>
 #include <type_traits>
 #include <algorithm>
@@ -12,15 +13,13 @@ namespace dmn {
 // requests. If the memory blocks are in use when an allocation request is made, the
 // allocator delegates allocation to the global heap.
 class slab_allocator_t {
+    DMN_PINNED(slab_allocator_t);
+
 public:
     inline slab_allocator_t() noexcept {
         std::fill(in_use_, in_use_ + storages_count_, static_cast<in_use_t>(0));
     }
 
-    slab_allocator_t(const slab_allocator_t&) = delete;
-    slab_allocator_t(slab_allocator_t&&) = delete;
-    slab_allocator_t& operator=(const slab_allocator_t&) = delete;
-    slab_allocator_t& operator=(slab_allocator_t&&) = delete;
 
     void* allocate(std::size_t size) {
         const std::size_t blocks_required = (size / (sizeof(storage_t) - 1)) + 1;

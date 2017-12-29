@@ -2,8 +2,6 @@
 
 #include "node.hpp"
 
-#include "netlink.hpp"
-
 namespace dmn {
 
 class node_impl_write_0: public virtual node_base_t {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "packet.hpp"
+#include "impl/packet.hpp"
 
 #include <cstdint>
 #include <array>
@@ -25,9 +25,9 @@ public:
     }
 
     auto body_mutable_buffer() {
-        data_.resize(body_size() + sizeof(packet_header_t));
+        data_.resize(expected_body_size() + sizeof(packet_header_t));
         return boost::asio::mutable_buffers_1{
-            boost::asio::mutable_buffer(data_.data() + sizeof(packet_header_t), body_size())
+            boost::asio::mutable_buffer(data_.data() + sizeof(packet_header_t), expected_body_size())
         };
     }
 
@@ -38,7 +38,8 @@ public:
     }
 
     packet_types_enum packet_type() const noexcept;
-    std::uint32_t body_size() const noexcept;
+    std::uint32_t expected_body_size() const noexcept;
+    std::uint32_t actual_body_size() const noexcept;
     using packet_t::clear;
     using packet_t::empty;
     packet_t to_native() && noexcept;

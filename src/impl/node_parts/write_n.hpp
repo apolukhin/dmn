@@ -1,15 +1,14 @@
 #pragma once
 
 #include "node_base.hpp"
-#include "netlink.hpp"
-#include "silent_mt_queue.hpp"
-#include "work_counter.hpp"
 
-#include "netlink_with_packet.hpp"
-#include "edge_out.hpp"
-#include "packet_network.hpp"
+#include "impl/silent_mt_queue.hpp"
+#include "impl/work_counter.hpp"
 
-#include <mutex>
+#include "impl/edges/edge_out.hpp"
+#include "impl/net/netlink.hpp"
+#include "impl/net/packet_network.hpp"
+
 #include <vector>
 #include <boost/make_unique.hpp>
 
@@ -98,6 +97,8 @@ class node_impl_write_n: public count_out_edges_helper {
     work_counter_t                  pending_writes_;
 
     using edge_t = edge_out_t<boost::asio::const_buffer>;
+    using link_t = edge_t::link_t;
+
     const std::size_t               edges_count_;
     const std::unique_ptr<edge_t[]> edges_;
 
@@ -112,12 +113,11 @@ class node_impl_write_n: public count_out_edges_helper {
         }
     }
 
-    void on_error(const boost::system::error_code& e, netlink_write_t::guard_t&& guard) {
-        BOOST_ASSERT_MSG(guard, "Empy guard in error handler");
-        auto& link = *guard.mutex();
+    void on_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
+        BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
+        auto& link = edge_t::link_from_guard(guard);
+        auto p = std::move(link.packet);
         auto& edge = edges_[link.helper_id()];
-        auto it = edge.find_netlink(guard);
-        auto p = std::move(it->packet);
         edge.push_immediate(std::move(p));
 
         if (state() == node_state::RUN) {
@@ -126,17 +126,17 @@ class node_impl_write_n: public count_out_edges_helper {
             return;
         }
 
-        link.async_close(std::move(guard));
+        link.close(std::move(guard));
         // TODO: log issue
     }
 
-    void on_operation_finished(netlink_write_t::guard_t&& guard) {
+    void on_operation_finished(tcp_write_proto_t::guard_t&& guard) {
         started_at_least_1_link_.store(true, std::memory_order_relaxed);
         pending_writes_.remove();
 
-        const auto id = guard.mutex()->helper_id();
-        auto it = edges_[id].find_netlink(guard);
-        packets_.send_success(it->packet);
+        auto& link = edge_t::link_from_guard(guard);
+        packets_.send_success(link.packet);
+        const auto id = link.helper_id();
         edges_[id].try_steal_work(std::move(guard));
     }
 
@@ -155,22 +155,22 @@ public:
         for (std::size_t i = 0; i < edges_count_; ++i, ++edges_it) {
             const vertex_t& out_vertex = config[target(*edges_it, config)];
 
-            pending_writes_.add(out_vertex.hosts.size());
-            edge_t::netlinks_t links;
-            links.reserve(out_vertex.hosts.size());
-            for (const auto& host : out_vertex.hosts) {
-
-                auto link = netlink_write_t::construct(
+            const auto hosts_count = out_vertex.hosts.size();
+            pending_writes_.add(hosts_count);
+            edges_[i].preinit_links(hosts_count);
+            for (std::size_t j = 0; j < hosts_count; ++j) {
+                const auto& host = out_vertex.hosts[j];
+                edges_[i].inplace_construct_link(
+                    j,
                     host.first.c_str(),
                     host.second,
                     ios(),
-                    [this](const auto& e, auto&& guard) { on_error(e, std::move(guard)); },
-                    [this](auto&& guard) { on_operation_finished(std::move(guard)); },
+                    [this](const auto& e, auto guard) { on_error(e, std::move(guard)); },
+                    [this](auto guard) { on_operation_finished(std::move(guard)); },
                     i
                 );
-                links.push_back(decltype(links)::value_type{std::move(link), {}});
             }
-            edges_[i].set_links(std::move(links));
+            edges_[i].connect_links();
         }
     }
 
@@ -185,6 +185,7 @@ public:
         BOOST_ASSERT_MSG(!packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");
 
         for_each_edge([](auto& edge){
+            edge.assert_no_more_data();
             edge.close_links();
         });
     }
@@ -205,8 +206,12 @@ public:
     ~node_impl_write_n() noexcept  {
         const bool soft_shutdown = started_at_least_1_link_.load();
 
-        for_each_edge([soft_shutdown](auto& edge){
-            edge.close_links(!soft_shutdown);
+        for_each_edge([soft_shutdown](edge_t& edge) {
+            if (soft_shutdown) {
+                edge.assert_no_more_data();
+            }
+
+            edge.close_links();
         });
 
         BOOST_ASSERT_MSG(!soft_shutdown || !pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");

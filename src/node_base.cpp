@@ -3,11 +3,11 @@
 #include "load_graph.hpp"
 #include <istream>
 
-#include "node_impl/read_0.hpp"
-#include "node_impl/read_1.hpp"
-#include "node_impl/write_0.hpp"
-#include "node_impl/write_1.hpp"
-#include "node_impl/write_n.hpp"
+#include "impl/node_parts/read_0.hpp"
+#include "impl/node_parts/read_1.hpp"
+#include "impl/node_parts/write_0.hpp"
+#include "impl/node_parts/write_1.hpp"
+#include "impl/node_parts/write_n.hpp"
 
 #include <boost/make_unique.hpp>
 

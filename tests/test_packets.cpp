@@ -1,5 +1,5 @@
-#include "packet.hpp"
-#include "packet_network.hpp"
+#include "impl/packet.hpp"
+#include "impl/net/packet_network.hpp"
 #include <numeric>
 
 #include <boost/test/unit_test.hpp>

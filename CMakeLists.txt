@@ -26,37 +26,45 @@ MESSAGE("Using Boost libraries path: ${Boost_LIBRARY_DIRS}")
 add_library(dmn_core STATIC
 
     src/assert.cpp
-    src/utility.hpp
-    src/silent_mt_queue.hpp
-    src/work_counter.hpp
 
-    src/slab_allocator.hpp
-    src/wrap_handler.hpp
-
-    src/load_graph.hpp
     src/load_graph.cpp
+    src/load_graph.hpp
 
-    src/netlink.hpp
-    src/netlink.cpp
-    src/packet.hpp
-    src/packet.cpp
-    src/packet_network.hpp
-    src/packet_network.cpp
-    src/stream.hpp
-
-    src/node.hpp
-    src/node.cpp
-    src/node_base.hpp
     src/node_base.cpp
-    src/state_tracker.hpp
+    src/node_base.hpp
+    src/node.cpp
+    src/node.hpp
 
-    src/node_impl/netlink_with_packet.hpp
-    src/node_impl/edge_out.hpp
-    src/node_impl/read_0.hpp
-    src/node_impl/read_1.hpp
-    src/node_impl/write_0.hpp
-    src/node_impl/write_1.hpp
-    src/node_impl/write_n.hpp
+    src/stream.hpp
+    src/utility.hpp
+
+    src/impl/packet.cpp
+    src/impl/packet.hpp
+    src/impl/pinned_container.hpp
+    src/impl/silent_mt_queue.hpp
+    src/impl/state_tracker.hpp
+    src/impl/work_counter.hpp
+
+    src/impl/edges/edge_out.hpp
+
+    src/impl/net/netlink.hpp
+    src/impl/net/packet_network.cpp
+    src/impl/net/packet_network.hpp
+    src/impl/net/tcp_read_proto.cpp
+    src/impl/net/tcp_read_proto.hpp
+    src/impl/net/tcp_write_proto.cpp
+    src/impl/net/tcp_write_proto.hpp
+    src/impl/net/proto_common.cpp
+    src/impl/net/proto_common.hpp
+    src/impl/net/slab_allocator.hpp
+    src/impl/net/wrap_handler.hpp
+
+    src/impl/node_parts/read_0.hpp
+    src/impl/node_parts/read_1.hpp
+    src/impl/node_parts/write_0.hpp
+    src/impl/node_parts/write_1.hpp
+    src/impl/node_parts/write_n.hpp
+
 )
 
 

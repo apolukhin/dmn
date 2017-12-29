@@ -17,4 +17,14 @@ inline cbytes_ptr_t as_bytes_ptr(const void* p) noexcept {
     return static_cast<cbytes_ptr_t>(p);
 }
 
-} // namespace boost
+// For classes that must be "pinned" to a particular location.
+// Note: not using a base class, because we may have multiple inheritance of those.
+#define DMN_PINNED(type)                    \
+    type(const type&) = delete;             \
+    type(type&&) = delete;                  \
+    type& operator=(const type&) = delete;  \
+    type& operator=(type&&) = delete        \
+    /**/
+
+
+} // namespace dmn

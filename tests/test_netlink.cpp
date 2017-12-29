@@ -1,6 +1,7 @@
-#include "netlink.hpp"
-#include "node.hpp"
-#include "packet_network.hpp"
+#include "impl/net/netlink.hpp"
+#include "impl/net/packet_network.hpp"
+#include "impl/net/tcp_read_proto.hpp"
+#include "impl/net/tcp_write_proto.hpp"
 #include <numeric>
 
 #include <boost/test/unit_test.hpp>
@@ -17,9 +18,11 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
     };
     boost::asio::ip::tcp::socket    new_socket{dmn::node_t::ios()};
     const dmn::packet_t ethalon = tests::clone(packet);
-    dmn::netlink_read_ptr           netlink_in;
-
     dmn::packet_network_t packet_network{std::move(packet)};
+
+    using netlink_in_t = dmn::netlink_t<std::vector<unsigned char>, dmn::tcp_read_proto_t>;
+    std::unique_ptr<netlink_in_t> netlink_in;
+
 
     bool sended = false;
     int received = 0;
@@ -29,28 +32,31 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
         BOOST_TEST(!error);
         accepted = true;
 
-        netlink_in = dmn::netlink_read_t::construct(
+        netlink_in = netlink_in_t::construct(
             std::move(new_socket),
-            [&](auto*, auto& e){
+            [&](auto& /*proto*/, auto& e){
                 BOOST_TEST(received == 1);
             },
-            [&](dmn::packet_t&& packet) {
+            [&](auto& /*proto*/) {
                 BOOST_CHECK(!ethalon.raw_storage().empty());
-                BOOST_CHECK(packet.raw_storage() == ethalon.raw_storage());
+                BOOST_CHECK(netlink_in->packet == ethalon.raw_storage());
                 ++ received;
             }
         );
+        netlink_in->packet.resize(boost::asio::buffer_size(packet_network.const_buffer()));
+
+        netlink_in->async_read(boost::asio::buffer(netlink_in->packet));
     });
 
-
-    dmn::netlink_write_ptr netlink_out = dmn::netlink_write_t::construct("127.0.0.1", 63101, dmn::node_t::ios(),
-        [&](const boost::system::error_code&, auto&& g) {
+    using netlink_out_t = dmn::netlink_t<int, dmn::tcp_write_proto_t>;
+    std::unique_ptr<netlink_out_t> netlink_out = netlink_out_t::construct("127.0.0.1", 63101, dmn::node_t::ios(),
+        [&](const boost::system::error_code&, auto g) {
             BOOST_TEST(static_cast<bool>(g));
             auto* l = g.mutex();
             BOOST_TEST(l == netlink_out.get());
             l->async_connect(std::move(g));
         },
-        [&](auto&& g) {
+        [&](auto g) {
             if (sended) return;
             sended = true;
             netlink_out->async_send(std::move(g), packet_network.const_buffer());

@@ -1,13 +1,14 @@
 #pragma once
 
-#include <boost/container/flat_map.hpp>
-#include "packet.hpp"
 #include "node_base.hpp"
+#include "impl/packet.hpp"
 
 namespace dmn {
 
 // Does the packet <--> user data conversions
 class stream_t {
+    DMN_PINNED(stream_t);
+
     node_base_t& node_;
 
     packet_t in_data_;
