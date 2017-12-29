@@ -46,7 +46,7 @@ protected:
             return;
         }
 
-        BOOST_ASSERT(e == node_state::STOPPED);
+        BOOST_ASSERT_MSG(e == node_state::STOPPED, "Wrong shutdown sequence: state node_state::STOPPING_WRITE could tranform only into node_state::STOPPED");
     }
 
 public:

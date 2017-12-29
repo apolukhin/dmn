@@ -5,119 +5,41 @@
 #include "silent_mt_queue.hpp"
 #include "work_counter.hpp"
 
-#include <mutex>
-#include <vector>
-
-
+#include "netlink_with_packet.hpp"
+#include "edge_out.hpp"
 #include "packet_network.hpp"
+
 
 namespace dmn {
 
-struct netlink_with_packet {
-    netlink_write_ptr link;
-    packet_network_t packet;
-};
+class node_impl_write_1: public virtual node_base_t {
+    work_counter_t                  pending_writes_;
+    edge_out_t<packet_network_t>    edge_;
+    std::atomic<bool>               started_at_least_1_link_{false};
 
-inline bool operator<(const netlink_with_packet& lhs, const netlink_write_t* rhs) noexcept {
-    return lhs.link.get() < rhs;
-}
+    void on_error(const boost::system::error_code& e, netlink_write_t::guard_t&& guard) {
+        BOOST_ASSERT_MSG(guard, "Empy guard in error handler");
+        auto& link = *guard.mutex();
+        auto it = edge_.find_netlink(guard);
+        auto p = std::move(it->packet);
+        edge_.push_immediate(std::move(p));
 
-inline bool operator<(const netlink_with_packet& lhs, const netlink_with_packet& rhs) noexcept {
-    return lhs.link.get() < rhs.link.get();
-}
-
-inline bool operator<(const netlink_write_t* lhs, const netlink_with_packet& rhs) noexcept {
-    return lhs < rhs.link.get();
-}
-
-struct edges_out_t {
-    std::mutex                                                  netlinks_mutex_;
-    std::vector<netlink_with_packet>                            netlinks_;
-    silent_mt_queue<packet_network_t>                           data_to_send_;
-
-    auto find_netlink(netlink_write_t* link, std::unique_lock<std::mutex>& /*guard*/) {
-        const auto pair = std::equal_range(netlinks_.begin(), netlinks_.end(), link);
-        BOOST_ASSERT(pair.second - pair.first == 1);
-        return pair.first;
-    }
-
-    void try_send() {
-        std::unique_lock<std::mutex> guard(netlinks_mutex_);
-        for (auto& v: netlinks_) {   // TODO: balancing
-            netlink_write_t::guard_t lock = v.link->try_lock();
-            if (!lock) {
-                continue;
-            }
-
-            auto p = data_to_send_.try_pop();
-            if (!p) {
-                return;
-            }
-            v.packet = std::move(*p);
-
-            auto* connection = v.link.get();
-            auto buf = v.packet.const_buffer();
-            guard.unlock();
-
-            connection->async_send(std::move(lock), buf);
-            break;
-        }
-    }
-
-    void try_steal_work(netlink_write_t* link, netlink_write_t::guard_t&& guard) {
-        // Work stealing
-        auto v = data_to_send_.try_pop();
-        if (!v) {
-            return;
-        }
-
-        std::unique_lock<std::mutex> g(netlinks_mutex_);
-        auto it = find_netlink(link, g);
-        it->packet = std::move(*v);
-        auto buf = it->packet.const_buffer();
-        g.unlock();
-
-        link->async_send(std::move(guard), buf);
-    }
-};
-
-class node_impl_write_1: public virtual node_base_t, private edges_out_t {
-    work_counter_t                  pending_writes_;    
-
-    void on_error(netlink_write_t* link, const boost::system::error_code& e, netlink_write_t::guard_t&& guard) {
         if (state() == node_state::RUN) {
-            std::unique_lock<std::mutex> g(netlinks_mutex_);
-            auto it = find_netlink(link, g);
-            auto p = std::move(it->packet);
-            g.unlock();
-
-            if (!p.empty()) {
-                data_to_send_.silent_push_front(std::move(p));
-            }
-
-            link->async_connect(std::move(guard)); // TODO: dealy?
-            try_send();
+            edge_.try_send();
+            link.async_connect(std::move(guard)); // TODO: dealy?
             return;
         }
 
-        std::unique_lock<std::mutex> g(netlinks_mutex_);
-        auto it = find_netlink(link, g);
-        auto l = std::move(*it);
-        netlinks_.erase(it);
-        g.unlock();
-
-        if (!l.packet.empty()) {
-            data_to_send_.silent_push_front(std::move(l.packet));
-        }
-
-        guard.unlock();
-        (void)l; // TODO: log issue
+        pending_writes_.remove();
+        link.async_close(std::move(guard));
+        on_stop_writing();
+        // TODO: log issue
     }
 
-    void on_operation_finished(netlink_write_t* link, netlink_write_t::guard_t&& guard) {
+    void on_operation_finished(netlink_write_t::guard_t&& guard) {
+        started_at_least_1_link_.store(true, std::memory_order_relaxed);
         pending_writes_.remove();
-
-        try_steal_work(link, std::move(guard));
+        edge_.try_steal_work(std::move(guard));
     }
 
 public:
@@ -127,24 +49,24 @@ public:
             config
         );
 
-        BOOST_ASSERT(edges_out.second - edges_out.first == 1);
+        BOOST_ASSERT_MSG(edges_out.second - edges_out.first == 1, "Incorrect node class used for dealing single out edge. Error in make_node() function");
         const vertex_t& out_vertex = config[target(*edges_out.first, config)];
 
         pending_writes_.add(out_vertex.hosts.size());
+        edge_out_t<packet_network_t>::netlinks_t links;
+        links.reserve(out_vertex.hosts.size());
         for (const auto& host : out_vertex.hosts) {
 
             auto link = netlink_write_t::construct(
                 host.first.c_str(),
                 host.second,
                 ios(),
-                [this](auto* link, const auto& e, auto&& guard) { on_error(link, e, std::move(guard)); },
-                [this](auto* link, auto&& guard) { on_operation_finished(link, std::move(guard)); }
+                [this](const auto& e, auto&& guard) { on_error(e, std::move(guard)); },
+                [this](auto&& guard) { on_operation_finished(std::move(guard)); }
             );
-            auto* link_ptr = link.get();
-            netlinks_.emplace_back(netlink_with_packet{std::move(link), packet_network_t{}});
+            links.emplace_back(netlink_with_packet_t<packet_network_t>{std::move(link), packet_network_t{}});
         }
-
-        std::sort(netlinks_.begin(), netlinks_.end());
+        edge_.set_links(std::move(links));
     }
 
     void on_stop_writing() noexcept override final {
@@ -154,11 +76,9 @@ public:
     }
 
     void on_stoped_writing() noexcept override final {
-        BOOST_ASSERT(!pending_writes_.get());
-        BOOST_ASSERT(!data_to_send_.try_pop());
+        BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
 
-        std::lock_guard<std::mutex> g(netlinks_mutex_);
-        netlinks_.clear();
+        edge_.close_links();
     }
 
     void on_packet_accept(packet_t packet) override final {
@@ -166,13 +86,17 @@ public:
 
         packet_t data = call_callback(std::move(packet));
 
-        data_to_send_.silent_push(packet_network_t{std::move(data)});
+        edge_.push(packet_network_t{std::move(data)});
 
         // Rechecking for case when write operation was finished before we pushed into the data_to_send_
-        try_send();
+        edge_.try_send();
     }
 
-    ~node_impl_write_1() noexcept = default;
+    ~node_impl_write_1() noexcept {
+        const bool soft_shutdown = started_at_least_1_link_.load();
+        edge_.close_links(!soft_shutdown);
+        BOOST_ASSERT_MSG(!soft_shutdown || !pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
+    }
 };
 
 }

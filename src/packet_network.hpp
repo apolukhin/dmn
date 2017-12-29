@@ -42,6 +42,10 @@ public:
     using packet_t::clear;
     using packet_t::empty;
     packet_t to_native() && noexcept;
+
+    const void* data_address() const noexcept {
+        return data_.data();
+    }
 };
 
 

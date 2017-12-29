@@ -63,13 +63,14 @@ public:
 
 private:
     boost::asio::ip::tcp::socket socket_;
-    using on_error_t = std::function<void(netlink_write_t*, const boost::system::error_code&, guard_t&&)>;
+    using on_error_t = std::function<void(const boost::system::error_code&, guard_t&&)>;
     const on_error_t on_error_;
 
-    using on_operation_finished_t = std::function<void(netlink_write_t*, guard_t&&)>;
+    using on_operation_finished_t = std::function<void(guard_t&&)>;
     const on_operation_finished_t on_operation_finished_;
 
     const boost::asio::ip::tcp::endpoint remote_ep_;
+    const std::size_t                    helper_id_;
     std::atomic<int> write_lock_ {0};
 
 
@@ -81,22 +82,32 @@ private:
     netlink_write_t& operator=(const netlink_write_t&) = delete;
 
     void process_error(const boost::system::error_code& e, guard_t&& g) {
-        on_error_(this, e, std::move(g));
+        on_error_(e, std::move(g));
     }
 
-    netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished);
+    netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished, std::size_t helper_id);
 
 public:
     void async_connect(guard_t&& g);
 
     template <class OnError, class OnFinish>
-    static netlink_write_ptr construct(const char* addr, unsigned short port, boost::asio::io_service& ios, OnError&& on_error, OnFinish&& on_operation_finished) {
+    static netlink_write_ptr construct(const char* addr, unsigned short port, boost::asio::io_service& ios, OnError&& on_error, OnFinish&& on_operation_finished, std::size_t helper_id = 0) {
         return netlink_write_ptr{new netlink_write_t(
-            addr, port, ios, std::forward<OnError>(on_error), std::forward<OnFinish>(on_operation_finished)
+            addr, port, ios, std::forward<OnError>(on_error), std::forward<OnFinish>(on_operation_finished), helper_id
         )};
     }
 
+    std::size_t helper_id() const noexcept {
+        return helper_id_;
+    }
+
     void async_send(guard_t&& g, boost::asio::const_buffers_1 data);
+
+    // Closes the socket and leaves the link in locked state
+    void async_close(guard_t&& g) noexcept;
+    void async_cancel() noexcept {
+        socket_.cancel();
+    }
 
     guard_t try_lock() noexcept;
     void unlock() noexcept;

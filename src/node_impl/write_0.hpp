@@ -29,10 +29,13 @@ public:
     }
 
     void on_stoped_writing() noexcept override final {
-        BOOST_ASSERT(!pending_writes_.get());
+        BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
     }
 
-    ~node_impl_write_0() noexcept = default;
+    ~node_impl_write_0() noexcept {
+        BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
+    }
+
 };
 
 }

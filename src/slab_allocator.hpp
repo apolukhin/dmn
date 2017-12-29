@@ -3,6 +3,7 @@
 #include <new>
 #include <type_traits>
 #include <algorithm>
+#include <boost/assert.hpp>
 
 namespace dmn {
 
@@ -36,6 +37,7 @@ public:
             }
         }
 
+        BOOST_ASSERT_MSG(false, "Slab allocator failed to find slab in a list of known slabs");
         ::operator delete(pointer);
     }
 
@@ -66,6 +68,7 @@ private:
             return storages_ + i;
         }
 
+        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empy slabs");
         return ::operator new(size);
     }
 
@@ -77,6 +80,7 @@ private:
             }
         }
 
+        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empy slabs");
         return ::operator new(size);
     }
 

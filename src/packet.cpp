@@ -19,7 +19,7 @@ void packet_t::place_header() {
 
 void packet_t::add_data(const unsigned char* data, std::uint32_t size, const char* type) {
     place_header();
-    BOOST_ASSERT(type);
+    BOOST_ASSERT_MSG(type, "Empty message type. This must be handled in stream_t!");
     constexpr auto range = [](const std::uint32_t& v) noexcept {
         return std::make_pair(
             reinterpret_cast<const unsigned char*>(&v),
@@ -43,7 +43,7 @@ void packet_t::add_data(const unsigned char* data, std::uint32_t size, const cha
 }
 
 std::pair<const unsigned char*, std::size_t> packet_t::get_data(const char* type) const noexcept {
-    BOOST_ASSERT(type);
+    BOOST_ASSERT_MSG(type, "Empty message type. This must be handled in stream_t!");
     if (data_.empty()) {
         return { nullptr, 0u };
     }
@@ -56,16 +56,16 @@ std::pair<const unsigned char*, std::size_t> packet_t::get_data(const char* type
         std::uint32_t current_type_len; // intentionally unintialized
         std::memcpy(&current_type_len, data, sizeof(std::uint32_t));
         data += sizeof(std::uint32_t);
-        BOOST_ASSERT(data < data_end);
+        BOOST_ASSERT_MSG(data < data_end, "Data overflow after getting size of message's type");
 
         const bool found = (current_type_len == type_len && !std::memcmp(data, type, type_len));
         data += current_type_len;
-        BOOST_ASSERT(data < data_end);
+        BOOST_ASSERT_MSG(data < data_end, "Data overflow after getting message's type");
 
         std::uint32_t current_data_len; // intentionally unintialized
         std::memcpy(&current_data_len, data, sizeof(std::uint32_t));
         data += sizeof(std::uint32_t);
-        BOOST_ASSERT(data < data_end);
+        BOOST_ASSERT_MSG(data < data_end, "Data overflow after getting message");
 
         if (found) {
             return {data, current_data_len};

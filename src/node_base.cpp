@@ -7,6 +7,7 @@
 #include "node_impl/read_1.hpp"
 #include "node_impl/write_0.hpp"
 #include "node_impl/write_1.hpp"
+#include "node_impl/write_n.hpp"
 
 #include <boost/make_unique.hpp>
 
@@ -14,7 +15,7 @@ namespace dmn {
 
 namespace {
     auto get_this_node_descriptor(const graph_t& g, const char* node_id) {
-        BOOST_ASSERT(node_id);
+        BOOST_ASSERT_MSG(node_id, "Searching for node without ID. Error in load_graph function or in make_node");
         const auto vds = vertices(g);
         const auto it_descriptor = std::find_if(vds.first, vds.second, [node_id, &g](auto v_descriptor){
             return g[v_descriptor].node_id == node_id;
@@ -65,6 +66,8 @@ struct node_in_x_out_x final: Read, Write {
 using node_in_1_out_0 = node_in_x_out_x<node_impl_read_1, node_impl_write_0>;
 using node_in_0_out_1 = node_in_x_out_x<node_impl_read_0, node_impl_write_1>;
 using node_in_1_out_1 = node_in_x_out_x<node_impl_read_1, node_impl_write_1>;
+using node_in_0_out_n = node_in_x_out_x<node_impl_read_0, node_impl_write_n>;
+using node_in_1_out_n = node_in_x_out_x<node_impl_read_1, node_impl_write_n>;
 
 std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, std::uint16_t host_id) {
     const graph_t graph = load_graph(in);
@@ -100,8 +103,14 @@ std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, st
     case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(graph, node_id, host_id);
     case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(graph, node_id, host_id);
     case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(graph, node_id, host_id);
+    case node_types_t::IN_0_OUT_N: return boost::make_unique<node_in_0_out_n>(graph, node_id, host_id);
+    case node_types_t::IN_1_OUT_N: return boost::make_unique<node_in_1_out_n>(graph, node_id, host_id);
+
+    // TODO: for testing only! This is wrong!
+    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_1_out_0>(graph, node_id, host_id);
+
     default:
-        BOOST_ASSERT(false);
+        BOOST_ASSERT_MSG(false, "Error in make_node function - not all node types are handled");
     }
 
     return {};

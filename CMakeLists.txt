@@ -50,10 +50,13 @@ add_library(dmn_core STATIC
     src/node_base.cpp
     src/state_tracker.hpp
 
+    src/node_impl/netlink_with_packet.hpp
+    src/node_impl/edge_out.hpp
     src/node_impl/read_0.hpp
     src/node_impl/read_1.hpp
     src/node_impl/write_0.hpp
     src/node_impl/write_1.hpp
+    src/node_impl/write_n.hpp
 )
 
 

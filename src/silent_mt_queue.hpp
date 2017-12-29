@@ -13,6 +13,7 @@ class alignas(hardware_destructive_interference_size) silent_mt_queue {
     std::deque<T>   data_;
 
 public:
+    using value_type = T;
     inline void silent_push(T value);
     inline void silent_push_front(T value);
 

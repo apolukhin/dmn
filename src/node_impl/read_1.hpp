@@ -27,7 +27,7 @@ class node_impl_read_1: public virtual node_base_t {
         auto it = std::find_if(netlinks_.begin(), netlinks_.end(), [link](auto& v){
             return v.get() == link;
         });
-        BOOST_ASSERT(it != netlinks_.end());
+        BOOST_ASSERT_MSG(it != netlinks_.end(), "Failed to find a netlink in a vector of known netlinks. Error in accepting function or in the error handling callback");
 
         auto l = std::move(*it);
         netlinks_.erase(it);
@@ -40,7 +40,7 @@ class node_impl_read_1: public virtual node_base_t {
         if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
             return;
         }
-        BOOST_ASSERT(!error);
+        BOOST_ASSERT_MSG(!error, "Error while accepting");
 
         auto link = netlink_read_t::construct(
             std::move(new_socket_),

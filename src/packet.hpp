@@ -56,12 +56,12 @@ public:
 
 
     packet_header_t& header() noexcept {
-        BOOST_ASSERT(!data_.empty());
+        BOOST_ASSERT_MSG(!data_.empty(), "Attempt to get header without initin it via place_header()");
         return *reinterpret_cast<packet_header_t*>(data_.data());
     }
 
     const packet_header_t& header() const noexcept {
-        BOOST_ASSERT(!data_.empty());
+        BOOST_ASSERT_MSG(!data_.empty(), "Attempt to get header without initin it via place_header()");
         return *reinterpret_cast<const packet_header_t*>(data_.data());
     }
 };

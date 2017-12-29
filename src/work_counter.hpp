@@ -12,7 +12,7 @@ class work_counter_t {
 
 public:
     auto add(const std::size_t work_count = 1) noexcept {
-        BOOST_ASSERT(work_count > 0);
+        BOOST_ASSERT_MSG(work_count > 0, "Attempt to add 0 work");
 
         const auto work = works_.fetch_add(work_count, std::memory_order_acquire);
         BOOST_ASSERT_MSG(std::numeric_limits<decltype(works_.load())>::max() - work >= work_count, "Counter overflow");
@@ -25,7 +25,7 @@ public:
     }
 
     auto remove(const std::size_t work_count = 1) noexcept {
-        BOOST_ASSERT(work_count > 0);
+        BOOST_ASSERT_MSG(work_count > 0, "Attempt to add 0 work");
 
         const auto work = works_.fetch_sub(work_count, std::memory_order_release);
         BOOST_ASSERT_MSG(work >= work_count, "Counter overflow");

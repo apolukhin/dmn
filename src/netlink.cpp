@@ -9,6 +9,12 @@
 
 namespace dmn {
 
+#define ASSERT_GUARD(g) \
+    BOOST_ASSERT_MSG(g, "Attempt to connect without holding a netlink guard");  \
+    BOOST_ASSERT_MSG(g.mutex() == this, "Sending with foreign netlink guard");  \
+    /**/
+
+
 namespace {
     inline packet_network_t& netpacket(std::aligned_storage_t<sizeof(packet_t), alignof(packet_t)>& data) noexcept {
         static_assert(sizeof(packet_t) == sizeof(packet_network_t), "");
@@ -76,14 +82,13 @@ netlink_read_t::netlink_read_t(boost::asio::ip::tcp::socket&& socket, on_error_t
     async_read();
 }
 
-netlink_write_t::netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished)
+netlink_write_t::netlink_write_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished, std::size_t helper_id)
     : socket_(ios)
     , on_error_(std::move(on_error))
     , on_operation_finished_(std::move(on_operation_finished))
     , remote_ep_{boost::asio::ip::address::from_string(addr), port}
-{
-    async_connect(try_lock());
-}
+    , helper_id_(helper_id)
+{}
 
 netlink_read_t::~netlink_read_t() {
     netpacket(network_in_holder_).~packet_network_t();
@@ -92,7 +97,7 @@ netlink_read_t::~netlink_read_t() {
 netlink_write_t::~netlink_write_t() = default;
 
 void netlink_write_t::async_connect(netlink_write_t::guard_t&& g) {
-    BOOST_ASSERT(g);
+    ASSERT_GUARD(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
         if (e) {
             process_error(e, std::move(guard));
@@ -100,7 +105,7 @@ void netlink_write_t::async_connect(netlink_write_t::guard_t&& g) {
         }
 
         set_socket_options(socket_);
-        on_operation_finished_(this, std::move(guard));
+        on_operation_finished_(std::move(guard));
     };
 
     socket_.async_connect(
@@ -144,19 +149,16 @@ void netlink_read_t::async_read() {
 }
 
 void netlink_write_t::async_send(guard_t&& g, boost::asio::const_buffers_1 buf) {
-    BOOST_ASSERT(g);
-    BOOST_ASSERT(g.mutex() == this);
+    ASSERT_GUARD(g);
     BOOST_ASSERT(socket_.is_open());
 
-    const std::size_t size = boost::asio::buffer_size(buf);
-
-    auto on_write = [guard = std::move(g), size, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
+    auto on_write = [guard = std::move(g), buf, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
             process_error(e, std::move(guard));
             return;
         }
-        BOOST_ASSERT_MSG(size == bytes_written, "Wrong bytes count written");
-        on_operation_finished_(this, std::move(guard));
+        BOOST_ASSERT_MSG(boost::asio::buffer_size(buf) == bytes_written, "Wrong bytes count written");
+        on_operation_finished_(std::move(guard));
     };
 
     boost::asio::async_write(
@@ -166,22 +168,34 @@ void netlink_write_t::async_send(guard_t&& g, boost::asio::const_buffers_1 buf) 
     );
 }
 
+void netlink_write_t::async_close(guard_t&& g) noexcept {
+    ASSERT_GUARD(g);
+    boost::system::error_code ignore;
+    socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
+    socket_.close(ignore);
+    g.release(); // leaving link in locked state
+    BOOST_ASSERT_MSG(write_lock_.load(std::memory_order_relaxed) != 0, "After close the connection is not locked");
+    BOOST_ASSERT_MSG(write_lock_.load(std::memory_order_relaxed) == 1, "After close the connection is locked multiple times");
+}
+
 
 netlink_write_t::guard_t netlink_write_t::try_lock() noexcept {
     int expected = 0;
     const bool res = write_lock_.compare_exchange_strong(expected, 1, std::memory_order_relaxed);
 
     if (res) {
+        BOOST_ASSERT_MSG(expected == 0, "Lock is broken, allowed values are 0 and 1");
         return {*this, std::adopt_lock};
     }
+    BOOST_ASSERT_MSG(expected == 1, "Lock is broken, allowed values are 0 and 1");
 
-    BOOST_ASSERT(expected == 1);
     return {};
 }
 
 void netlink_write_t::unlock() noexcept {
     const int old_value = write_lock_.fetch_sub(1, std::memory_order_relaxed);
-    BOOST_ASSERT(old_value == 1);
+    BOOST_ASSERT_MSG(old_value != 0, "Lock underflow");
+    BOOST_ASSERT_MSG(old_value == 1, "Locked multiple times");
 }
 
 } // namespace dmn
