@@ -18,8 +18,8 @@ void noop(dmn::stream_t& e){
 }
 
 BOOST_AUTO_TEST_CASE(make_nodes_base) {
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -27,13 +27,11 @@ BOOST_AUTO_TEST_CASE(make_nodes_base) {
         }
     )"};
 
-    std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a", 0);
+    auto node_a = dmn::make_node(g, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
-    ss.str(g);
-    auto node_b = dmn::make_node(ss, "b", 0);
+    auto node_b = dmn::make_node(g, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -43,8 +41,8 @@ BOOST_AUTO_TEST_CASE(make_nodes_base) {
 }
 
 BOOST_AUTO_TEST_CASE(make_nodes_chain_base) {
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -54,20 +52,17 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_base) {
         }
     )"};
 
-    std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a", 0);
+    auto node_a = dmn::make_node(g, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
-    ss.str(g);
-    auto node_b = dmn::make_node(ss, "b", 0);
+    auto node_b = dmn::make_node(g, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
-    ss.str(g);
-    auto node_c = dmn::make_node(ss, "c", 0);
+    auto node_c = dmn::make_node(g, "c", 0);
     BOOST_TEST(!!node_c);
     node_c->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -77,8 +72,8 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_base) {
 }
 
 BOOST_AUTO_TEST_CASE(make_nodes_long_chain_base) {
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -90,27 +85,23 @@ BOOST_AUTO_TEST_CASE(make_nodes_long_chain_base) {
         }
     )"};
 
-    std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a", 0);
+    auto node_a = dmn::make_node(g, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
-    ss.str(g);
-    auto node_b = dmn::make_node(ss, "b", 0);
+    auto node_b = dmn::make_node(g, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
-    ss.str(g);
-    auto node_c = dmn::make_node(ss, "c", 0);
+    auto node_c = dmn::make_node(g, "c", 0);
     BOOST_TEST(!!node_c);
     node_c->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
-    ss.str(g);
-    auto node_d = dmn::make_node(ss, "d", 0);
+    auto node_d = dmn::make_node(g, "d", 0);
     BOOST_TEST(!!node_d);
     node_d->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -120,8 +111,8 @@ BOOST_AUTO_TEST_CASE(make_nodes_long_chain_base) {
 }
 
 BOOST_AUTO_TEST_CASE(make_nodes_bradcast_base) {
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -132,27 +123,23 @@ BOOST_AUTO_TEST_CASE(make_nodes_bradcast_base) {
         }
     )"};
 
-    std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a", 0);
+    auto node_a = dmn::make_node(g, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = &noop;
 
-    ss.str(g);
-    auto node_b = dmn::make_node(ss, "b", 0);
+    auto node_b = dmn::make_node(g, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
-    ss.str(g);
-    auto node_c = dmn::make_node(ss, "c", 0);
+    auto node_c = dmn::make_node(g, "c", 0);
     BOOST_TEST(!!node_c);
     node_c->callback_ = [](dmn::stream_t& e){
         e.stop();
     };
 
-    ss.str(g);
-    auto node_d = dmn::make_node(ss, "d", 0);
+    auto node_d = dmn::make_node(g, "d", 0);
     BOOST_TEST(!!node_d);
     node_d->callback_ = [](dmn::stream_t& e){
         e.stop();
@@ -207,8 +194,8 @@ void resend_sequence(dmn::stream_t& s) {
 BOOST_AUTO_TEST_CASE(make_nodes_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -216,13 +203,11 @@ BOOST_AUTO_TEST_CASE(make_nodes_end_to_end) {
         }
     )"};
 
-    std::stringstream ss{g};
-    auto node_a = dmn::make_node(ss, "a", 0);
+    auto node_a = dmn::make_node(g, "a", 0);
     BOOST_TEST(!!node_a);
     node_a->callback_ = generate_sequence;
 
-    ss.str(g);
-    auto node_b = dmn::make_node(ss, "b", 0);
+    auto node_b = dmn::make_node(g, "b", 0);
     BOOST_TEST(!!node_b);
     node_b->callback_ = remember_sequence;
 
@@ -237,8 +222,8 @@ BOOST_AUTO_TEST_CASE(make_nodes_end_to_end) {
 BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -251,8 +236,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
     )"};
 
     auto make_node = [g](const char* name, auto callback) {
-        std::stringstream ss{g};
-        auto node = dmn::make_node(ss, name, 0);
+        auto node = dmn::make_node(g, name, 0);
         BOOST_TEST(!!node);
         node->callback_ = callback;
         return node;
@@ -276,8 +260,8 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
 BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b [hosts = "127.0.0.1:44002"];
@@ -289,8 +273,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
     )"};
 
     auto make_node = [g](const char* name, auto callback) {
-        std::stringstream ss{g};
-        auto node = dmn::make_node(ss, name, 0);
+        auto node = dmn::make_node(g, name, 0);
         BOOST_TEST(!!node);
         node->callback_ = callback;
         return node;
@@ -316,8 +299,8 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
 BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
-    std::string g{R"(
-        digraph graph
+    const std::string g{R"(
+        digraph test
         {
             a [hosts = "127.0.0.1:44001"];
             b0 [hosts = "127.0.0.1:44002"];
@@ -345,8 +328,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
     )"};
 
     auto make_node = [g](const char* name, auto callback) {
-        std::stringstream ss{g};
-        auto node = dmn::make_node(ss, name, 0);
+        auto node = dmn::make_node(g, name, 0);
         BOOST_TEST(!!node);
         node->callback_ = callback;
         return node;

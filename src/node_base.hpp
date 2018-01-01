@@ -28,13 +28,13 @@ public:
     callback_t callback_ = nullptr;
 
     // Functions:
-    node_base_t(const graph_t& in, const char* node_id, std::uint16_t host_id);
+    node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_id);
 
     virtual void on_packet_accept(packet_t packet) = 0;
     packet_t call_callback(packet_t packet) noexcept;
     virtual ~node_base_t() noexcept;
 };
 
-std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, std::uint16_t host_id);
+std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_id, std::uint16_t host_id);
 
 }

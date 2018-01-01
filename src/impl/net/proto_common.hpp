@@ -11,10 +11,10 @@ namespace dmn {
     #else
         int optval = 1; // enable
         constexpr socklen_t optlen = sizeof(optval);
-        BOOST_VERIFY_MSG(setsockopt(s.native(), SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) == 0, "Failed to set SO_KEEPALIVE for a reading socket");
+        BOOST_VERIFY_MSG(setsockopt(s.native_handle(), SOL_SOCKET, SO_KEEPALIVE, &optval, optlen) == 0, "Failed to set SO_KEEPALIVE for a reading socket");
 
         optval = 10; // 10s
-        BOOST_VERIFY_MSG(setsockopt(s.native(), SOL_TCP, TCP_KEEPIDLE, &optval, optlen) == 0, "Failed to set KEEPALIVE timeout for a reading socket");
+        BOOST_VERIFY_MSG(setsockopt(s.native_handle(), SOL_TCP, TCP_KEEPIDLE, &optval, optlen) == 0, "Failed to set KEEPALIVE timeout for a reading socket");
     #endif
     }
 
@@ -26,7 +26,7 @@ namespace dmn {
     #else
         unsigned int optval = 150; // 150ms
         constexpr socklen_t optlen = sizeof(optval);
-        BOOST_VERIFY_MSG(setsockopt(s.native(), SOL_TCP, TCP_USER_TIMEOUT, &optval, optlen) == 0, "Failed to set ACK timeout for a socket");
+        BOOST_VERIFY_MSG(setsockopt(s.native_handle(), SOL_TCP, TCP_USER_TIMEOUT, &optval, optlen) == 0, "Failed to set ACK timeout for a socket");
     #endif
     }
 

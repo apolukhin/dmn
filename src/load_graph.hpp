@@ -37,6 +37,6 @@ using graph_t = boost::adjacency_list<
     , vertex_t
 >;
 
-graph_t load_graph(std::istream& in);
+graph_t load_graph(const std::string& in);
 
 }

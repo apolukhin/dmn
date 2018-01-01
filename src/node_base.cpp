@@ -28,8 +28,8 @@ namespace {
     }
 }
 
-node_base_t::node_base_t(const graph_t& in, const char* node_id, std::uint16_t host_id)
-    : config(in)
+node_base_t::node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_id)
+    : config(std::move(in))
     , this_node_descriptor(get_this_node_descriptor(config, node_id))
     , this_node(config[this_node_descriptor])
     , host_id_(host_id)
@@ -49,8 +49,8 @@ node_base_t::~node_base_t() noexcept = default;
 
 template <class Read, class Write>
 struct node_in_x_out_x final: Read, Write {
-    node_in_x_out_x(const graph_t& in, const char* node_id, std::uint16_t host_id)
-        : node_base_t(in, node_id, host_id)
+    node_in_x_out_x(graph_t&& in, const char* node_id, std::uint16_t host_id)
+        : node_base_t(std::move(in), node_id, host_id)
         , Read()
         , Write()
     {}
@@ -69,8 +69,8 @@ using node_in_1_out_1 = node_in_x_out_x<node_impl_read_1, node_impl_write_1>;
 using node_in_0_out_n = node_in_x_out_x<node_impl_read_0, node_impl_write_n>;
 using node_in_1_out_n = node_in_x_out_x<node_impl_read_1, node_impl_write_n>;
 
-std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, std::uint16_t host_id) {
-    const graph_t graph = load_graph(in);
+std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_id, std::uint16_t host_id) {
+    graph_t graph = load_graph(in);
     const auto this_node_descriptor = get_this_node_descriptor(graph, node_id);
 
     const auto edges_out = boost::out_edges(
@@ -100,14 +100,14 @@ std::unique_ptr<node_base_t> make_node(std::istream& in, const char* node_id, st
     );
 
     switch(type) {
-    case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(graph, node_id, host_id);
-    case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(graph, node_id, host_id);
-    case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(graph, node_id, host_id);
-    case node_types_t::IN_0_OUT_N: return boost::make_unique<node_in_0_out_n>(graph, node_id, host_id);
-    case node_types_t::IN_1_OUT_N: return boost::make_unique<node_in_1_out_n>(graph, node_id, host_id);
+    case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_0_OUT_N: return boost::make_unique<node_in_0_out_n>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_1_OUT_N: return boost::make_unique<node_in_1_out_n>(std::move(graph), node_id, host_id);
 
     // TODO: for testing only! This is wrong!
-    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_1_out_0>(graph, node_id, host_id);
+    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_1_out_0>(std::move(graph), node_id, host_id);
 
     default:
         BOOST_ASSERT_MSG(false, "Error in make_node function - not all node types are handled");

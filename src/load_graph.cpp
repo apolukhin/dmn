@@ -1,7 +1,5 @@
-
 #include "load_graph.hpp"
 
-#define BOOST_GRAPH_USE_SPIRIT_PARSER
 #include <boost/graph/graphviz.hpp>
 #include <boost/graph/hawick_circuits.hpp>
 #include <boost/optional.hpp>
@@ -85,7 +83,7 @@ void validate_vertexes(const graph_t& graph) {
         if (v.hosts.empty()) {
             throw std::runtime_error(
                 "Each vertex must have a non empty hosts property. Example:\n"
-                "(digraph graph {\n"
+                "(digraph example {\n"
                 "    a [hosts = '127.0.0.1:44001'];\n"
                 "    b [hosts = '127.0.0.1:44003'];\n"
                 "    a -> b;\n"
@@ -120,14 +118,14 @@ static std::ostream& operator<<(std::ostream& os, const hosts_strong_t& hosts) {
     return os;
 }
 
-graph_t load_graph(std::istream& in) {
+graph_t load_graph(const std::string& in) {
     graph_t graph;
-
-    boost::dynamic_properties dp;
-    dp.property("node_id", boost::get(&vertex_t::node_id, graph));
-    dp.property("hosts", boost::get(&vertex_t::hosts, graph));
-
-    boost::read_graphviz(in, graph, dp);
+    {
+        boost::dynamic_properties dp;
+        dp.property("node_id", boost::get(&vertex_t::node_id, graph));
+        dp.property("hosts", boost::get(&vertex_t::hosts, graph));
+        boost::read_graphviz(in.begin(), in.end(), graph, dp);
+    }
     validate_flow_network(graph);
     validate_vertexes(graph);
 

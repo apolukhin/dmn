@@ -17,7 +17,7 @@ add_definitions(-DBOOST_ASIO_DISABLE_HANDLER_TYPE_REQUIREMENTS=1)
 add_definitions(-DBOOST_ENABLE_ASSERT_DEBUG_HANDLER=1)
 set(Boost_NO_SYSTEM_PATHS ON)
 set(Boost_USE_STATIC_LIBS OFF)
-find_package(Boost COMPONENTS filesystem thread unit_test_framework system REQUIRED)
+find_package(Boost COMPONENTS filesystem thread unit_test_framework system graph regex REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS} src)
 link_directories(${Boost_LIBRARY_DIRS})
 MESSAGE("Using Boost libraries path: ${Boost_LIBRARY_DIRS}")
@@ -64,7 +64,6 @@ add_library(dmn_core STATIC
     src/impl/node_parts/write_0.hpp
     src/impl/node_parts/write_1.hpp
     src/impl/node_parts/write_n.hpp
-
 )
 
 
@@ -73,4 +72,4 @@ add_executable(dmn src/main.cpp)
 
 aux_source_directory(tests SRC_LIST_TESTS)
 add_executable(dmn_tests ${SRC_LIST_TESTS} tests/tests_common.hpp)
-target_link_libraries(dmn_tests dmn_core boost_system -ldl ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
+target_link_libraries(dmn_tests dmn_core boost_system boost_regex boost_graph -ldl ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} -lpthread)

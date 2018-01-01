@@ -4,7 +4,8 @@
 #include <iosfwd>
 
 namespace boost { namespace asio {
-    class io_service;
+    class io_context;
+    using io_service = io_context;
 }}
 
 namespace dmn {
