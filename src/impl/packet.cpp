@@ -50,7 +50,7 @@ std::pair<const unsigned char*, std::size_t> packet_t::get_data(const char* type
 
     const std::uint32_t type_len = std::strlen(type);
     const unsigned char* data = data_.data() + sizeof(header());
-    const unsigned char* const data_end = data + data_.size();
+    const unsigned char* const data_end = data_.data() + data_.size();
 
     while (data != data_end) {
         std::uint32_t current_type_len; // intentionally unintialized

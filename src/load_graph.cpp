@@ -104,7 +104,7 @@ static std::istream& operator>>(std::istream& in, hosts_strong_t& hosts) {
     for (auto& v: hosts_with_port) {
         const auto delim = v.find(':');
         hosts.base().emplace_back(
-            v.substr(0, v.find(':')),
+            boost::trim_left_copy(v.substr(0, v.find(':'))),
             (delim == std::string::npos ? 63101 : boost::lexical_cast<unsigned short>(v.substr(delim + 1)))
         );
     }

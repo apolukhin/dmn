@@ -13,170 +13,40 @@
 
 #include "tests_common.hpp"
 
-void noop(dmn::stream_t& e){
-    e.stop();
-}
-
-BOOST_AUTO_TEST_CASE(make_nodes_base) {
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44001"];
-            b [hosts = "127.0.0.1:44002"];
-            a -> b;
-        }
-    )"};
-
-    auto node_a = dmn::make_node(g, "a", 0);
-    BOOST_TEST(!!node_a);
-    node_a->callback_ = &noop;
-
-    auto node_b = dmn::make_node(g, "b", 0);
-    BOOST_TEST(!!node_b);
-    node_b->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    tests::shutdown_nodes(node_a, node_b);
-}
-
-BOOST_AUTO_TEST_CASE(make_nodes_chain_base) {
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44001"];
-            b [hosts = "127.0.0.1:44002"];
-            c [hosts = "127.0.0.1:44003"];
-            a -> b;
-            b -> c;
-        }
-    )"};
-
-    auto node_a = dmn::make_node(g, "a", 0);
-    BOOST_TEST(!!node_a);
-    node_a->callback_ = &noop;
-
-    auto node_b = dmn::make_node(g, "b", 0);
-    BOOST_TEST(!!node_b);
-    node_b->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    auto node_c = dmn::make_node(g, "c", 0);
-    BOOST_TEST(!!node_c);
-    node_c->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    tests::shutdown_nodes(node_a, node_b, node_c);
-}
-
-BOOST_AUTO_TEST_CASE(make_nodes_long_chain_base) {
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44001"];
-            b [hosts = "127.0.0.1:44002"];
-            c [hosts = "127.0.0.1:44003"];
-            d [hosts = "127.0.0.1:44004"];
-            a -> b;
-            b -> c;
-            c -> d;
-        }
-    )"};
-
-    auto node_a = dmn::make_node(g, "a", 0);
-    BOOST_TEST(!!node_a);
-    node_a->callback_ = &noop;
-
-    auto node_b = dmn::make_node(g, "b", 0);
-    BOOST_TEST(!!node_b);
-    node_b->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    auto node_c = dmn::make_node(g, "c", 0);
-    BOOST_TEST(!!node_c);
-    node_c->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    auto node_d = dmn::make_node(g, "d", 0);
-    BOOST_TEST(!!node_d);
-    node_d->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    tests::shutdown_nodes(node_a, node_b, node_c, node_d);
-}
-
-BOOST_AUTO_TEST_CASE(make_nodes_bradcast_base) {
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44001"];
-            b [hosts = "127.0.0.1:44002"];
-            c [hosts = "127.0.0.1:44003"];
-            d [hosts = "127.0.0.1:44004"];
-            a -> b -> c;
-            a -> d -> c;
-        }
-    )"};
-
-    auto node_a = dmn::make_node(g, "a", 0);
-    BOOST_TEST(!!node_a);
-    node_a->callback_ = &noop;
-
-    auto node_b = dmn::make_node(g, "b", 0);
-    BOOST_TEST(!!node_b);
-    node_b->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    auto node_c = dmn::make_node(g, "c", 0);
-    BOOST_TEST(!!node_c);
-    node_c->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    auto node_d = dmn::make_node(g, "d", 0);
-    BOOST_TEST(!!node_d);
-    node_d->callback_ = [](dmn::stream_t& e){
-        e.stop();
-    };
-
-    tests::shutdown_nodes(node_a, node_b, node_c, node_d);
-}
 
 namespace {
 
 std::atomic<unsigned> sequence_counter{0};
-constexpr unsigned max_seq = 129;
-const std::map<unsigned, unsigned> seq_ethalon = []() {
+constexpr unsigned max_seq = 257;
+const std::map<unsigned, unsigned> seq_ethalon(unsigned val = 1) {
     std::map<unsigned, unsigned> res;
     for (unsigned i = 0; i <= max_seq; ++i) {
-        res[i] = 1;
+        res[i] = val;
     }
     return res;
-}();
+}
 
 std::mutex  seq_mutex;
 std::map<unsigned, unsigned> sequences;
 
 void generate_sequence(dmn::stream_t& s) {
     const unsigned seq = sequence_counter.fetch_add(1);
-    auto data = boost::lexical_cast<std::string>(seq);
-    s.add(data.data(), data.size(), "seq");
 
-    if (seq == max_seq) {
-        //dmn::node_base_t::ios().stop();
-        //dmn::node_base_t::ios().reset()
+    if (seq <= max_seq) {
+        auto data = boost::lexical_cast<std::string>(seq);
+        s.add(data.data(), data.size(), "seq");
+    }
+
+    if (seq >= max_seq) {
         s.stop();
     }
 }
 
 void remember_sequence(dmn::stream_t& s) {
     const auto data = s.get_data("seq");
+    if (data.second == 0) {
+        return;
+    }
     unsigned seq = 0;
     const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
     BOOST_CHECK(res);
@@ -215,9 +85,79 @@ BOOST_AUTO_TEST_CASE(make_nodes_end_to_end) {
     tests::shutdown_nodes(node_a, node_b);
 
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon);
+    BOOST_CHECK(sequences == seq_ethalon());
 }
 
+
+BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_generators) {
+    sequence_counter = 0;
+    sequences.clear();
+    const std::string g{R"(
+        digraph test
+        {
+            a [hosts = "127.0.0.1:44001; 127.0.0.1:44002; 127.0.0.1:44003;127.0.0.1:44004;127.0.0.1:44005"];
+            b [hosts = "127.0.0.1:44006"];
+            a -> b;
+        }
+    )"};
+
+    std::unique_ptr<dmn::node_base_t> node_a_5[5] = {
+        dmn::make_node(g, "a", 0),
+        dmn::make_node(g, "a", 1),
+        dmn::make_node(g, "a", 2),
+        dmn::make_node(g, "a", 3),
+        dmn::make_node(g, "a", 4)
+    };
+    for (auto& v: node_a_5) {
+        BOOST_TEST(!!v);
+        v->callback_ = generate_sequence;
+    }
+
+    auto node_b = dmn::make_node(g, "b", 0);
+    BOOST_TEST(!!node_b);
+    node_b->callback_ = remember_sequence;
+
+
+    tests::shutdown_nodes(node_a_5[0], node_a_5[1], node_a_5[2], node_a_5[3], node_a_5[4], node_b);
+
+    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
+    BOOST_CHECK(sequences == seq_ethalon());
+}
+/* TODO:
+BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_consumers) {
+    sequence_counter = 0;
+    sequences.clear();
+    const std::string g{R"(
+        digraph test
+        {
+            a [hosts = "127.0.0.1:44006"];
+            b [hosts = "127.0.0.1:44001; 127.0.0.1:44002; 127.0.0.1:44003;127.0.0.1:44004;127.0.0.1:44005"];
+            a -> b;
+        }
+    )"};
+
+    auto node_a = dmn::make_node(g, "a", 0);
+    BOOST_TEST(!!node_a);
+    node_a->callback_ = generate_sequence;
+
+    std::unique_ptr<dmn::node_base_t> node_b_5[5] = {
+        dmn::make_node(g, "b", 0),
+        dmn::make_node(g, "b", 1),
+        dmn::make_node(g, "b", 2),
+        dmn::make_node(g, "b", 3),
+        dmn::make_node(g, "b", 4)
+    };
+    for (auto& v: node_b_5) {
+        BOOST_TEST(!!v);
+        v->callback_ = remember_sequence;
+    }
+
+    tests::shutdown_nodes(node_a, node_b_5[0], node_b_5[1], node_b_5[2], node_b_5[3], node_b_5[4]);
+
+    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
+    BOOST_CHECK(sequences == seq_ethalon());
+}
+*/
 
 BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
     sequence_counter = 0;
@@ -252,7 +192,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
     );
 
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon);
+    BOOST_CHECK(sequences == seq_ethalon());
 }
 
 
@@ -286,12 +226,9 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
         make_node("d", remember_sequence)
     );
 
-    auto ethalon = seq_ethalon;
-    for (auto& v : ethalon) {
-        ++v.second;
-    }
+
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == ethalon);
+    BOOST_CHECK(sequences == seq_ethalon(2));
 }
 
 
@@ -349,10 +286,6 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
         make_node("c", remember_sequence)
     );
 
-    auto ethalon = seq_ethalon;
-    for (auto& v : ethalon) {
-        v.second += 9;
-    }
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == ethalon);
+    BOOST_CHECK(sequences == seq_ethalon(10));
 }

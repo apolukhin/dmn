@@ -37,6 +37,7 @@ node_base_t::node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_i
 
 packet_t node_base_t::call_callback(packet_t packet) noexcept {
     stream_t s{*this, std::move(packet)};
+
     node_base_t::callback_(s);
     return s.move_out_data();
 }

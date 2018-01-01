@@ -8,6 +8,8 @@ namespace detail {
 
 template <class Node>
 void shutdown_nodes_impl(Node&& node) {
+    BOOST_TEST(!!node);
+
     node->shutdown_gracefully();
     dmn::node_base_t::ios().reset();
     dmn::node_base_t::ios().poll();
@@ -18,6 +20,7 @@ void shutdown_nodes_impl(Node&& node) {
 
 template <class Node, class... Nodes>
 void shutdown_nodes_impl(Node&& node, Nodes&&... nodes) {
+    BOOST_TEST(!!node);
     shutdown_nodes_impl(node);
     detail::shutdown_nodes_impl(std::forward<Nodes>(nodes)...);
 }
@@ -28,7 +31,8 @@ void shutdown_nodes_impl(Node&& node, Nodes&&... nodes) {
 
 template <class Node, class... Nodes>
 void shutdown_nodes(Node&& node, Nodes&&... nodes) {
-    // First node must be shut down by app logic
+    BOOST_TEST(!!node);
+
     dmn::node_base_t::ios().reset();
     dmn::node_base_t::ios().poll();
     node.reset();
