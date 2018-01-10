@@ -128,9 +128,23 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_validation) {
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
         "Each vertex must have a non empty hosts property. Example:\n"
         "(digraph example {\n"
-        "    a [hosts = '127.0.0.1:44001'];\n"
-        "    b [hosts = '127.0.0.1:44003'];\n"
+        "    a [hosts = \"127.0.0.1:44001\"];\n"
+        "    b [hosts = \"127.0.0.1:44003\"];\n"
         "    a -> b;\n"
         "}"
+    });
+}
+
+BOOST_AUTO_TEST_CASE(graph_vertex_data_hosts_validation) {
+    const std::string ss(R"(
+        digraph test
+        {
+            a [hosts = "127.0.0.1:44001"];
+            b [hosts = "127.0.0.1:44001"];
+            a -> b;
+        }
+    )");
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
+        "Same host:port for vertexes 'a' and 'b'"
     });
 }

@@ -84,14 +84,32 @@ void validate_vertexes(const graph_t& graph) {
             throw std::runtime_error(
                 "Each vertex must have a non empty hosts property. Example:\n"
                 "(digraph example {\n"
-                "    a [hosts = '127.0.0.1:44001'];\n"
-                "    b [hosts = '127.0.0.1:44003'];\n"
+                "    a [hosts = \"127.0.0.1:44001\"];\n"
+                "    b [hosts = \"127.0.0.1:44003\"];\n"
                 "    a -> b;\n"
                 "}"
             );
         }
     }
+}
 
+void validate_hosts(const graph_t& graph) {
+    const auto all_vertices = vertices(graph);
+    std::unordered_map<std::pair<std::string, unsigned short>, std::size_t, boost::hash<std::pair<std::string, unsigned short>> > hosts_vertex;
+
+    for (auto vp = all_vertices; vp.first != vp.second; ++vp.first) {
+        const vertex_t& v = graph[*vp.first];
+
+        for (const auto& h: v.hosts.base()) {
+            if (hosts_vertex.count(h)) {
+                throw std::runtime_error(
+                    "Same host:port for vertexes '" + graph[hosts_vertex[h]].node_id + "' and '" + v.node_id + "'"
+                );
+            }
+
+            hosts_vertex[h] = *vp.first;
+        }
+    }
 }
 
 } // anonymous namespace
@@ -128,6 +146,7 @@ graph_t load_graph(const std::string& in) {
     }
     validate_flow_network(graph);
     validate_vertexes(graph);
+    validate_hosts(graph);
 
     return graph;
 }

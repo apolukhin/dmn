@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_generators) {
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
     BOOST_CHECK(sequences == seq_ethalon());
 }
-/* TODO:
+
 BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_consumers) {
     sequence_counter = 0;
     sequences.clear();
@@ -157,7 +157,52 @@ BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_consumers) {
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
     BOOST_CHECK(sequences == seq_ethalon());
 }
-*/
+
+BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5) {
+    sequence_counter = 0;
+    sequences.clear();
+    const std::string g{R"(
+        digraph test
+        {
+            a [hosts = "127.0.0.1:44006;127.0.0.1:44007;127.0.0.1:44008;127.0.0.1:44009;127.0.0.1:44010;"];
+            b [hosts = "127.0.0.1:44001; 127.0.0.1:44002; 127.0.0.1:44003;127.0.0.1:44004;127.0.0.1:44005"];
+            a -> b;
+        }
+    )"};
+
+    std::unique_ptr<dmn::node_base_t> node_a_5[5] = {
+        dmn::make_node(g, "a", 0),
+        dmn::make_node(g, "a", 1),
+        dmn::make_node(g, "a", 2),
+        dmn::make_node(g, "a", 3),
+        dmn::make_node(g, "a", 4)
+    };
+    for (auto& v: node_a_5) {
+        BOOST_TEST(!!v);
+        v->callback_ = generate_sequence;
+    }
+
+    std::unique_ptr<dmn::node_base_t> node_b_5[5] = {
+        dmn::make_node(g, "b", 0),
+        dmn::make_node(g, "b", 1),
+        dmn::make_node(g, "b", 2),
+        dmn::make_node(g, "b", 3),
+        dmn::make_node(g, "b", 4)
+    };
+    for (auto& v: node_b_5) {
+        BOOST_TEST(!!v);
+        v->callback_ = remember_sequence;
+    }
+
+    tests::shutdown_nodes(
+            node_a_5[0], node_a_5[1], node_a_5[2], node_a_5[3], node_a_5[4],
+            node_b_5[0], node_b_5[1], node_b_5[2], node_b_5[3], node_b_5[4]
+    );
+
+    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
+    BOOST_CHECK(sequences == seq_ethalon());
+}
+
 
 BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
     sequence_counter = 0;

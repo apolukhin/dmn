@@ -10,8 +10,8 @@ namespace dmn {
 // Replacement for std::vector<std::unique_ptr<T>> that has less indirections,
 // constructible with parameters (unlike new T[])
 template <class T>
-class pinned_container {
-    DMN_PINNED(pinned_container);
+class lazy_array {
+    DMN_PINNED(lazy_array);
 
     std::size_t size_ = 0;
     T*  data_ = nullptr;
@@ -19,7 +19,15 @@ class pinned_container {
 
     using storage_t = std::aligned_storage_t<sizeof(T), alignof(T)>;
 public:
-    pinned_container() noexcept = default;
+    using value_type = T;
+    using reference_type = value_type&;
+
+    lazy_array() noexcept = default;
+
+    std::size_t size() const noexcept {
+        BOOST_ASSERT_MSG(size_ != 0, "Incorrect usage of pinned_container. size() must be called after init()");
+        return size_;
+    }
 
     void init(std::size_t size) {
         BOOST_ASSERT_MSG(size_ == 0, "Incorrect usage of pinned_container. it must be inited only once");
@@ -28,7 +36,7 @@ public:
         data_ = reinterpret_cast<T*>(new storage_t[size_]);
     }
 
-    ~pinned_container() noexcept {
+    ~lazy_array() noexcept {
         BOOST_ASSERT_MSG(size_ == constructed_, "Incorrect usage of pinned_container. All the elements must be construted");
         for (std::size_t i = 0; i < constructed_; ++i) {
             (*this)[i].~T();

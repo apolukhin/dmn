@@ -38,13 +38,15 @@ add_library(dmn_core STATIC
     src/stream.hpp
     src/utility.hpp
 
+    src/impl/circular_iterator.hpp
+    src/impl/lazy_array.hpp
     src/impl/packet.cpp
     src/impl/packet.hpp
-    src/impl/pinned_container.hpp
     src/impl/silent_mt_queue.hpp
     src/impl/state_tracker.hpp
     src/impl/work_counter.hpp
 
+    src/impl/edges/edge_in.hpp
     src/impl/edges/edge_out.hpp
 
     src/impl/net/netlink.hpp

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "impl/pinned_container.hpp"
+#include "impl/circular_iterator.hpp"
+#include "impl/lazy_array.hpp"
 #include "impl/silent_mt_queue.hpp"
 #include "impl/net/netlink.hpp"
 #include "impl/net/packet_network.hpp"
@@ -11,12 +12,13 @@ namespace dmn {
 template <class Packet>
 struct edge_out_t {
     using link_t = netlink_t<Packet, tcp_write_proto_t>;
-    using netlinks_t = pinned_container<link_t>;
+    using netlinks_t = lazy_array<link_t>;
     using queue_t = silent_mt_queue<Packet>;
 
 private:
-    netlinks_t  netlinks_; // `const` after set_links()
-    queue_t     data_to_send_;
+    std::atomic_uintmax_t   last_used_link{0};
+    netlinks_t              netlinks_; // `const` after set_links()
+    queue_t                 data_to_send_;
 
     template <class Link>
     static boost::asio::const_buffers_1 get_buf(netlink_t<packet_network_t, Link>& link, packet_network_t v) noexcept {
@@ -42,6 +44,24 @@ private:
 
     static bool empty_packet(const packet_network_t& p) noexcept {
         return p.empty();
+    }
+
+    template <class Container>
+    struct round_robin_balancer_t {
+        Container&             c_;
+        const std::size_t      start_index_;
+
+        circular_iterator<Container> begin() const noexcept {
+            return circular_iterator<Container>(c_, start_index_, c_.size());
+        }
+
+        circular_iterator<Container> end() const noexcept {
+            return circular_iterator<Container>();
+        }
+    };
+
+    round_robin_balancer_t<netlinks_t> links_balancer() noexcept {
+        return round_robin_balancer_t<netlinks_t>{netlinks_, last_used_link.fetch_add(1, std::memory_order_relaxed)};
     }
 
 public:
@@ -70,7 +90,7 @@ public:
     }
 
     void close_links() noexcept {
-        for (auto& v: netlinks_) {   // TODO: balancing
+        for (auto& v: links_balancer()) {
             tcp_write_proto_t::guard_t lock = v.try_lock();
             if (lock) {
                 v.close(std::move(lock));
@@ -81,7 +101,7 @@ public:
     }
 
     void try_send() {
-        for (auto& v: netlinks_) {   // TODO: balancing
+        for (auto& v: links_balancer()) {
             tcp_write_proto_t::guard_t lock = v.try_lock();
             if (!lock) {
                 continue;
@@ -99,7 +119,6 @@ public:
     }
 
     void try_steal_work(tcp_write_proto_t::guard_t&& guard) {
-        // Work stealing
         auto v = data_to_send_.try_pop();
         if (!v) {
             return;
