@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iterator>
 #include <boost/assert.hpp>
 
 
@@ -20,7 +21,7 @@ public:
 
     circular_iterator(Container& c, std::size_t start_index, std::size_t iterations_count) noexcept
         : c_(std::addressof(c))
-        , index_(start_index < c.size() ? start_index : start_index % c.size())
+        , index_(start_index < c.size() ? start_index : (c.size() ? start_index % c.size() : 0))
         , iterations_remain_(iterations_count)
     {}
 
@@ -42,7 +43,7 @@ public:
         return it;
     }
 
-    typename Container::reference_type operator*() const noexcept {
+    typename Container::reference operator*() const noexcept {
         return (*c_)[index_];
     }
 

@@ -12,6 +12,24 @@ struct exception_message {
     }
 };
 
+BOOST_AUTO_TEST_CASE(graph_loading_wrong_syntax1) {
+    const std::string ss{R"(
+        digrph test
+        {
+        }
+    )"};
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::exception, exception_message{"Wanted \"graph\" or \"digraph\" (token is \"<identifier> 'digrph'\")"});
+}
+
+BOOST_AUTO_TEST_CASE(graph_loading_wrong_syntax2) {
+    const std::string ss{R"(
+        digraph test
+        { a -----> b
+        }
+    )"};
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::exception, exception_message{"Using -- in directed graph (token is \"<dash-dash> '--'\")"});
+}
+
 BOOST_AUTO_TEST_CASE(graph_loading_base) {
     const std::string ss{R"(
         digraph test
@@ -22,7 +40,6 @@ BOOST_AUTO_TEST_CASE(graph_loading_base) {
         }
     )"};
     BOOST_TEST(boost::num_vertices(dmn::load_graph(ss)) == 2);
-
 }
 
 BOOST_AUTO_TEST_CASE(graph_loading) {

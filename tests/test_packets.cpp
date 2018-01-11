@@ -26,3 +26,26 @@ BOOST_AUTO_TEST_CASE(packet_nonempty_body_conversions) {
     };
     BOOST_CHECK(native1.raw_storage() == native2.raw_storage());
 }
+
+BOOST_AUTO_TEST_CASE(packet_set_get_small_type_name) {
+    dmn::packet_t native;
+
+    const unsigned char d[] = "Hello";
+    native.add_data(d, sizeof(d), "some type");
+    BOOST_TEST(reinterpret_cast<const char*>(native.get_data("some type").first) == std::string("Hello"));
+    BOOST_TEST(native.get_data("some type").second == sizeof(d));
+}
+
+
+BOOST_AUTO_TEST_CASE(packet_set_get_huge_type_name) {
+    dmn::packet_t native;
+
+    std::string huge_type_name(65535 + 100, 'c');
+    BOOST_TEST(huge_type_name.size() > 65535);
+
+    const unsigned char d[] = "Hello";
+    native.add_data(d, sizeof(d), huge_type_name.c_str());
+    BOOST_TEST(reinterpret_cast<const char*>(native.get_data(huge_type_name.c_str()).first) == std::string("Hello"));
+    BOOST_TEST(native.get_data(huge_type_name.c_str()).second == sizeof(d));
+}
+

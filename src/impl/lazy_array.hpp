@@ -20,7 +20,7 @@ class lazy_array {
     using storage_t = std::aligned_storage_t<sizeof(T), alignof(T)>;
 public:
     using value_type = T;
-    using reference_type = value_type&;
+    using reference = value_type&;
 
     lazy_array() noexcept = default;
 
