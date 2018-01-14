@@ -40,6 +40,9 @@ public:
     packet_types_enum packet_type() const noexcept;
     std::uint32_t expected_body_size() const noexcept;
     std::uint32_t actual_body_size() const noexcept;
+    std::uint16_t edge_id_from_packet() const noexcept;
+    wave_id_t wave_id_from_packet() const noexcept;
+    void merge_packet(packet_network_t&& in);
     using packet_t::clear;
     using packet_t::empty;
     packet_t to_native() && noexcept;

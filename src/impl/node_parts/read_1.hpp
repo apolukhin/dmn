@@ -44,12 +44,10 @@ class node_impl_read_1: public virtual node_base_t {
             [this](auto& proto, const auto& e) { on_error(link_t::to_link(proto), e); },
             [this](auto& proto) { on_operation_finished(link_t::to_link(proto)); }
         );
+        start_accept();
 
         auto& link = edge_.add_link(std::move(link_ptr));
-
         link.async_read(link.packet.header_mutable_buffer());
-
-        start_accept();
     }
 
     void on_operation_finished(link_t& link) {

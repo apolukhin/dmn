@@ -272,7 +272,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
     );
 
 
-    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
+    //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
     BOOST_CHECK(sequences == seq_ethalon(2));
 }
 

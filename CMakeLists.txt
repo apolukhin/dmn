@@ -63,6 +63,7 @@ add_library(dmn_core STATIC
 
     src/impl/node_parts/read_0.hpp
     src/impl/node_parts/read_1.hpp
+    src/impl/node_parts/read_n.hpp
     src/impl/node_parts/write_0.hpp
     src/impl/node_parts/write_1.hpp
     src/impl/node_parts/write_n.hpp

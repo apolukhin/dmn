@@ -5,6 +5,7 @@
 
 #include "impl/node_parts/read_0.hpp"
 #include "impl/node_parts/read_1.hpp"
+#include "impl/node_parts/read_n.hpp"
 #include "impl/node_parts/write_0.hpp"
 #include "impl/node_parts/write_1.hpp"
 #include "impl/node_parts/write_n.hpp"
@@ -64,11 +65,17 @@ struct node_in_x_out_x final: Read, Write {
     ~node_in_x_out_x() noexcept = default;
 };
 
-using node_in_1_out_0 = node_in_x_out_x<node_impl_read_1, node_impl_write_0>;
 using node_in_0_out_1 = node_in_x_out_x<node_impl_read_0, node_impl_write_1>;
-using node_in_1_out_1 = node_in_x_out_x<node_impl_read_1, node_impl_write_1>;
 using node_in_0_out_n = node_in_x_out_x<node_impl_read_0, node_impl_write_n>;
+
+using node_in_1_out_0 = node_in_x_out_x<node_impl_read_1, node_impl_write_0>;
+using node_in_1_out_1 = node_in_x_out_x<node_impl_read_1, node_impl_write_1>;
 using node_in_1_out_n = node_in_x_out_x<node_impl_read_1, node_impl_write_n>;
+
+using node_in_n_out_0 = node_in_x_out_x<node_impl_read_n, node_impl_write_0>;
+using node_in_n_out_1 = node_in_x_out_x<node_impl_read_n, node_impl_write_1>;
+using node_in_n_out_n = node_in_x_out_x<node_impl_read_n, node_impl_write_n>;
+
 
 std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_id, std::uint16_t host_id) {
     graph_t graph = load_graph(in);
@@ -86,12 +93,16 @@ std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_i
 
     enum class node_types_t: unsigned {
         IN_0_OUT_0 = 0,
+
         IN_0_OUT_1 = 1,
         IN_0_OUT_N = 2,
+
         IN_1_OUT_0 = 1 << 2,
         IN_N_OUT_0 = 2 << 2,
+
         IN_1_OUT_1 = IN_1_OUT_0 | IN_0_OUT_1,
         IN_1_OUT_N = IN_1_OUT_0 | IN_0_OUT_N,
+        IN_N_OUT_1 = IN_N_OUT_0 | IN_0_OUT_1,
         IN_N_OUT_N = IN_N_OUT_0 | IN_0_OUT_N,
     };
 
@@ -107,8 +118,10 @@ std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_i
     case node_types_t::IN_0_OUT_N: return boost::make_unique<node_in_0_out_n>(std::move(graph), node_id, host_id);
     case node_types_t::IN_1_OUT_N: return boost::make_unique<node_in_1_out_n>(std::move(graph), node_id, host_id);
 
-    // TODO: for testing only! This is wrong!
-    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_1_out_0>(std::move(graph), node_id, host_id);
+    // TODO: This is currently incorrectly covered in tests! Tests must be fixed!!!
+    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_n_out_0>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_N_OUT_1: return boost::make_unique<node_in_n_out_1>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_N_OUT_N: return boost::make_unique<node_in_n_out_n>(std::move(graph), node_id, host_id);
 
     default:
         BOOST_ASSERT_MSG(false, "Error in make_node function - not all node types are handled");
