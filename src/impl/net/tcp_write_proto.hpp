@@ -2,6 +2,7 @@
 
 #include "impl/net/slab_allocator.hpp"
 
+#include <array>
 #include <atomic>
 #include <mutex>                        // unique_lock
 #include <boost/asio/ip/tcp.hpp>
@@ -39,7 +40,12 @@ public:
         return helper_id_;
     }
 
-    void async_send(guard_t g, boost::asio::const_buffers_1 data);
+    void async_send(guard_t g, std::array<boost::asio::const_buffer, 2> data);
+
+    void async_send(guard_t g, boost::asio::const_buffers_1 data) {
+        const std::array<boost::asio::const_buffer, 2> buf{*data.begin(), boost::asio::const_buffer{}};
+        async_send(std::move(g), buf);
+    }
 
     // Closes the socket and leaves the link in locked state
     void close(guard_t g) noexcept;

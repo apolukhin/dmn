@@ -33,20 +33,6 @@ public:
     static const netlink_t& to_link(const Proto& link) noexcept {
         return static_cast<const netlink_t&>(link);
     }
-
-    struct compare_addrs_t {
-        bool operator()(const std::unique_ptr<netlink_t>& lhs, const netlink_t& rhs) const noexcept {
-            return lhs.get() < &rhs;
-        }
-
-        bool operator()(const std::unique_ptr<netlink_t>& lhs, const std::unique_ptr<netlink_t>& rhs) const noexcept {
-            return lhs.get() < rhs.get();
-        }
-
-        bool operator()(const netlink_t& lhs, const std::unique_ptr<netlink_t>& rhs) const noexcept {
-            return &lhs < rhs.get();
-        }
-    };
 };
 
 

@@ -16,18 +16,26 @@ public:
     packet_network_t& operator=(packet_network_t&&) = default;
     explicit packet_network_t(packet_t&& n) noexcept;
 
-    auto header_const_buffer() noexcept {
+    boost::asio::const_buffers_1 header_const_buffer() noexcept {
         return boost::asio::const_buffers_1(reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t));
     }
-    auto header_mutable_buffer() noexcept {
+    boost::asio::mutable_buffers_1 header_mutable_buffer() noexcept {
         place_header();
         return boost::asio::mutable_buffers_1(reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t));
     }
 
-    auto body_mutable_buffer() {
+    boost::asio::mutable_buffers_1 body_mutable_buffer() {
         data_.resize(expected_body_size() + sizeof(packet_header_t));
         return boost::asio::mutable_buffers_1{
             boost::asio::mutable_buffer(data_.data() + sizeof(packet_header_t), expected_body_size())
+        };
+    }
+
+    boost::asio::const_buffers_1 body_const_buffer() const {
+        BOOST_ASSERT_MSG(data_.size() >= sizeof(packet_header_t), "Attempting to send body of a packet without header.");
+        BOOST_ASSERT_MSG(data_.size() - sizeof(packet_header_t) == expected_body_size(), "packet is bigger than the body we are trying to send");
+        return boost::asio::const_buffers_1{
+            boost::asio::const_buffer(data_.data() + sizeof(packet_header_t), expected_body_size())
         };
     }
 

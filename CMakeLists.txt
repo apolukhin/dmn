@@ -39,6 +39,7 @@ add_library(dmn_core STATIC
     src/utility.hpp
 
     src/impl/circular_iterator.hpp
+    src/impl/compare_addrs.hpp
     src/impl/lazy_array.hpp
     src/impl/packet.cpp
     src/impl/packet.hpp
@@ -61,6 +62,7 @@ add_library(dmn_core STATIC
     src/impl/net/slab_allocator.hpp
     src/impl/net/wrap_handler.hpp
 
+    src/impl/node_parts/packets_gatherer.hpp
     src/impl/node_parts/read_0.hpp
     src/impl/node_parts/read_1.hpp
     src/impl/node_parts/read_n.hpp

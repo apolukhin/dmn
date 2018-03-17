@@ -31,10 +31,10 @@ class counted_packets_storage {
             return lhs.data_address() < rhs.packet.data_address();
         }
         inline bool operator()(const counted_packet& lhs, boost::asio::const_buffer rhs) const noexcept {
-            return lhs.packet.data_address() < boost::asio::buffer_cast<const void*>(rhs);
+            return boost::asio::buffer_cast<const void*>(lhs.packet.body_const_buffer()) < boost::asio::buffer_cast<const void*>(rhs);
         }
         inline bool operator()(boost::asio::const_buffer lhs, const counted_packet& rhs) const noexcept {
-            return boost::asio::buffer_cast<const void*>(lhs) < rhs.packet.data_address();
+            return boost::asio::buffer_cast<const void*>(lhs) < boost::asio::buffer_cast<const void*>(rhs.packet.body_const_buffer());
         }
     };
 
@@ -50,12 +50,15 @@ public:
 
     boost::asio::const_buffers_1 add_packet(packet_network_t p) {
         BOOST_ASSERT_MSG(!p.empty(), "Attempt to add an empty packet (even without header!)");
+        if (p.expected_body_size() == 0) {
+            return boost::asio::const_buffers_1{nullptr, 0}; // Do nothing
+        }
 
         std::lock_guard<std::mutex> l(packets_mutex_);
         auto it = std::lower_bound(packets_.begin(), packets_.end(), p, addr_comparator{});
         it = packets_.insert(it, {std::move(p), counter_init_});
         pending_packets_ += counter_init_;
-        return it->packet.const_buffer();
+        return it->packet.body_const_buffer();
     }
 
     void send_success(boost::asio::const_buffer buf) {
@@ -65,6 +68,7 @@ public:
 
         std::lock_guard<std::mutex> l(packets_mutex_);
         const auto it = std::equal_range(packets_.begin(), packets_.end(), buf, addr_comparator{});
+        BOOST_ASSERT_MSG(it.second != it.first, "No packet found after successful send");
         BOOST_ASSERT_MSG(it.second - it.first == 1, "Found more that one matching buffer after successful send");
         counted_packet& v = *it.first;
         const auto val = --v.count;
@@ -96,7 +100,7 @@ struct count_out_edges_helper: public virtual node_base_t {
 class node_impl_write_n: public count_out_edges_helper {
     work_counter_t                  pending_writes_;
 
-    using edge_t = edge_out_t<boost::asio::const_buffer>;
+    using edge_t = edge_out_t<std::pair<packet_header_t, boost::asio::const_buffer>>;
     using link_t = edge_t::link_t;
 
     const std::size_t               edges_count_;
@@ -135,7 +139,7 @@ class node_impl_write_n: public count_out_edges_helper {
         pending_writes_.remove();
 
         auto& link = edge_t::link_from_guard(guard);
-        packets_.send_success(link.packet);
+        packets_.send_success(link.packet.second);
         const auto id = link.helper_id();
         edges_[id].try_steal_work(std::move(guard));
     }
@@ -193,14 +197,22 @@ public:
     void on_packet_accept(packet_t packet) override final {
         pending_writes_.add(edges_count_);
 
-        packet_network_t data{ call_callback(std::move(packet)) };
-        const auto buf = packets_.add_packet(std::move(data));
+        BOOST_ASSERT_MSG(!packet.empty(), "Attempt to send an empty packet, even without a header");
 
-        for_each_edge([buf](auto& edge) {
-            edge.push(buf);
+        auto response_packet = call_callback(std::move(packet));
+        const packet_header_t header = response_packet.header();
+        packet_network_t data{ std::move(response_packet) };
+        const auto body = packets_.add_packet(std::move(data));
+
+        for (std::size_t i = 0; i < edges_count_; ++i) {
+            edge_t& edge = edges_[i];
+            auto header_cpy = header;
+            header_cpy.edge_id = i; // TODO: big/little endian
+
+            edge.push({header_cpy, body});
             // Rechecking for case when write operation was finished before we pushed into the data_to_send_
             edge.try_send();
-        });
+        }
     }
 
     ~node_impl_write_n() noexcept  {

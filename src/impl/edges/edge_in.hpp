@@ -3,6 +3,7 @@
 #include "impl/net/netlink.hpp"
 #include "impl/net/packet_network.hpp"
 #include "impl/net/tcp_read_proto.hpp"
+#include "impl/compare_addrs.hpp"
 
 #include <deque>
 #include <memory>
@@ -42,7 +43,7 @@ public:
 
         std::unique_lock<std::mutex> guard(netlinks_mutex_);
 
-        const auto pair = std::equal_range(netlinks_.begin(), netlinks_.end(), link, typename link_t::compare_addrs_t{});
+        const auto pair = std::equal_range(netlinks_.begin(), netlinks_.end(), link, compare_addrs_t{});
         BOOST_ASSERT_MSG(pair.second - pair.first != 0, "Netlink not found in the vector of known netlinks");
         netlinks_.erase(pair.first);
 

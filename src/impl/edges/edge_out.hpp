@@ -38,12 +38,27 @@ private:
         return boost::asio::const_buffers_1{link.packet};
     }
 
+    template <class Link>
+    static std::array<boost::asio::const_buffer, 2> get_buf(netlink_t<std::pair<packet_header_t, boost::asio::const_buffer>, Link>& link, const std::pair<packet_header_t, boost::asio::const_buffer>& v) noexcept {
+        BOOST_ASSERT(!empty_packet(v));
+
+        link.packet = std::move(v);
+        return {
+            boost::asio::const_buffer{static_cast<const void*>(&link.packet.first), sizeof(packet_header_t)},
+            link.packet.second
+        };
+    }
+
     static bool empty_packet(boost::asio::const_buffer buf) noexcept {
         return boost::asio::buffer_size(buf) == 0;
     }
 
     static bool empty_packet(const packet_network_t& p) noexcept {
         return p.empty();
+    }
+
+    static bool empty_packet(const std::pair<packet_header_t, boost::asio::const_buffer>& p) noexcept {
+        return false;
     }
 
     template <class Container>

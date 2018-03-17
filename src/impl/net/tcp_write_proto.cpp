@@ -45,7 +45,7 @@ void tcp_write_proto_t::async_connect(tcp_write_proto_t::guard_t g) {
 
 
 
-void tcp_write_proto_t::async_send(guard_t g, boost::asio::const_buffers_1 buf) {
+void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buffer, 2> buf) {
     ASSERT_GUARD(g);
     BOOST_ASSERT(socket_.is_open());
 

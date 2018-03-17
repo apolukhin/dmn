@@ -276,7 +276,6 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
     BOOST_CHECK(sequences == seq_ethalon(2));
 }
 
-
 // TODO: this test is wrong! It is temporary, just to test write_n node
 BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
     sequence_counter = 0;
@@ -334,3 +333,4 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
     BOOST_CHECK(sequences == seq_ethalon(10));
 }
+

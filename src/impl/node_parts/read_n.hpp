@@ -6,11 +6,11 @@
 #include "impl/net/packet_network.hpp"
 #include "impl/edges/edge_in.hpp"
 #include "impl/net/tcp_read_proto.hpp"
+#include "impl/node_parts/packets_gatherer.hpp"
 
 #include <boost/make_unique.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/optional.hpp>
-#include <boost/container/small_vector.hpp>
+
 
 #include <mutex>
 
@@ -29,56 +29,6 @@ struct count_in_edges_helper: public virtual node_base_t {
     }
 };
 
-class packets_gatherer_t {
-    DMN_PINNED(packets_gatherer_t);
-
-    std::mutex  packets_mutex_;
-    using received_edge_ids_t = boost::container::small_vector<std::size_t, 16>;
-    std::unordered_map<wave_id_t, std::pair<received_edge_ids_t, packet_network_t> > packets_gatherer_;
-
-    const std::size_t edges_count_;
-
-public:
-    explicit packets_gatherer_t(std::size_t edge_count)
-        : edges_count_(edge_count)
-    {}
-
-    boost::optional<packet_network_t> combine_packets(packet_network_t p) {
-        boost::optional<packet_network_t> result;
-        const auto wave_id = p.wave_id_from_packet();
-        const auto edge_id = p.edge_id_from_packet();
-
-        std::lock_guard<std::mutex> l(packets_mutex_);
-        const auto it = packets_gatherer_.find(wave_id);
-        if (it == packets_gatherer_.cend()) {
-            auto packet_it = packets_gatherer_.emplace(
-                wave_id,
-                std::pair<received_edge_ids_t, packet_network_t>{{}, std::move(p)}
-            ).first;
-            packet_it->second.first.push_back(edge_id);
-            return result;
-        }
-
-        auto& edge_counter = it->second.first;
-        auto ins_it = std::lower_bound(edge_counter.begin(), edge_counter.end(), edge_id);
-        if (ins_it != edge_counter.end() && *ins_it == edge_id) {
-            // Duplicate packet.
-            // TODO: Write to log
-            return result;
-        }
-
-        edge_counter.insert(ins_it, edge_id);
-        if (edge_counter.size() == edges_count_) {
-            result.emplace(std::move(it->second.second));
-            packets_gatherer_.erase(it);
-            return result;
-        }
-
-        return result;
-    }
-
-    // TODO: drop partial packets after timeout
-};
 
 class node_impl_read_n: private count_in_edges_helper {
     boost::asio::ip::tcp::acceptor  acceptor_;
@@ -92,6 +42,35 @@ class node_impl_read_n: private count_in_edges_helper {
 
     packets_gatherer_t packs_;
 
+    class unknown_links_t {
+        std::mutex              unknown_links_mutex_;
+        std::vector<std::unique_ptr<link_t>>   unknown_links_;
+    public:
+        using link_ptr_t = std::unique_ptr<link_t>;
+
+        link_ptr_t extract(const link_t& l) {
+            link_ptr_t res{};
+
+            {
+                std::lock_guard<std::mutex> lock{unknown_links_mutex_};
+                auto it = std::find_if(unknown_links_.begin(), unknown_links_.end(), [l_ptr = &l](const auto& ptr) { return ptr.get() == l_ptr; });
+                if (it == unknown_links_.end()) {
+                    return res;
+                }
+
+                res = std::move(*it);
+                unknown_links_.erase(it);
+            }
+
+            return res;
+        }
+
+        void add(link_ptr_t l) {
+            std::lock_guard<std::mutex> lock{unknown_links_mutex_};
+            unknown_links_.push_back(std::move(l));
+        }
+    } unknown_links_;
+
 
     template <class F>
     void for_each_edge(F f) {
@@ -102,7 +81,9 @@ class node_impl_read_n: private count_in_edges_helper {
 
     void on_error(link_t& link, const boost::system::error_code& e) {
         if (!link.is_helper_id_set()) {
-            delete &link;           // Destroying non owned link
+            // Destroying non owned link
+            unknown_links_.extract(link);
+
             // TODO: log issue
             return;
         }
@@ -129,10 +110,8 @@ class node_impl_read_n: private count_in_edges_helper {
         );
         start_accept();
 
-        link_ptr->packet.header_mutable_buffer();    // place_header() is actually required here
-
-        // TODO: This is BAD! change the logic to avoid unowned pointers.
-        auto* link = link_ptr.release();    // Releasing link ownership to reclaim it in `on_operation_finished` or delete it in `on_error`
+        auto* link = link_ptr.get();    // Releasing link ownership to reclaim it in `on_operation_finished` or delete it in `on_error`
+        unknown_links_.add(std::move(link_ptr));
 
         link->async_read(link->packet.header_mutable_buffer());
     }
@@ -140,7 +119,7 @@ class node_impl_read_n: private count_in_edges_helper {
     void on_operation_finished(link_t& link) {
         BOOST_ASSERT_MSG(link.packet.packet_type() == packet_types_enum::DATA, "Packet types other than DATA are not supported");
         if (!link.is_helper_id_set()) {
-            std::unique_ptr<link_t> link_ptr(&link); // Taking ownership
+            std::unique_ptr<link_t> link_ptr = unknown_links_.extract(link);; // Taking ownership
 
             link.set_helper_id(link.packet.edge_id_from_packet());
             edges_[link.get_helper_id()].add_link(std::move(link_ptr));
@@ -153,7 +132,9 @@ class node_impl_read_n: private count_in_edges_helper {
         auto p = std::move(link.packet);
         link.async_read(link.packet.header_mutable_buffer());
 
-        /* TODO: STOPPED HERE
+/*      // TODO: stopped here:
+ *           Make sure that wawe_id is correctly transfered
+ *           edge_id is NOT correct. Fix in ALL the writing setups
         auto res = packs_.combine_packets(std::move(p));
         if (res) {
             on_packet_accept(std::move(*res).to_native());
