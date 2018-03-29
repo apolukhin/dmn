@@ -42,7 +42,7 @@ public:
                 wave_id,
                 std::pair<received_edge_ids_t, packet_network_t>{{}, std::move(p)}
             ).first;
-            packet_it->second.first.push_back(edge_id);
+            packet_it->second.first.push_back(edge_id); // TODO: `second.first.` looks awfull. Refactor!
             return result;
         }
 

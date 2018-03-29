@@ -46,7 +46,7 @@ public:
     }
 
     template <class... Args>
-    void inplace_construct_link(std::size_t i, Args&&... args) {
+    void inplace_construct(std::size_t i, Args&&... args) {
         BOOST_ASSERT_MSG(i == constructed_, "Incorrect usage of pinned_container. Elements must be construted sequentially, starting from element 0.");
         ++ constructed_;
         BOOST_ASSERT_MSG(constructed_ <= size_, "More elements constructed than initially planned in pinned_container::init().");

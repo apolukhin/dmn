@@ -18,10 +18,10 @@ namespace {
 
 std::atomic<unsigned> sequence_counter{0};
 constexpr unsigned max_seq = 257;
-const std::map<unsigned, unsigned> seq_ethalon(unsigned val = 1) {
+std::map<unsigned, unsigned> seq_ethalon(unsigned max_value = max_seq) {
     std::map<unsigned, unsigned> res;
-    for (unsigned i = 0; i <= max_seq; ++i) {
-        res[i] = val;
+    for (unsigned i = 0; i <= max_value; ++i) {
+        res[i] = 1;
     }
     return res;
 }
@@ -43,20 +43,35 @@ void generate_sequence(dmn::stream_t& s) {
 }
 
 void remember_sequence(dmn::stream_t& s) {
-    const auto data = s.get_data("seq");
-    if (data.second == 0) {
-        return;
+    for (const char* data_type: {"seq", "seq0", "seq1", "seq2", "seq3", "seq4", "seq5", "seq6", "seq7", "seq8", "seq9", "seq10"}) {
+        const auto data = s.get_data(data_type);
+        if (data.second == 0) {
+            continue;
+        }
+        unsigned seq = 0;
+        const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
+        BOOST_CHECK(res);
+        std::lock_guard<std::mutex> l(seq_mutex);
+        ++sequences[seq];
     }
-    unsigned seq = 0;
-    const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
-    BOOST_CHECK(res);
-    std::lock_guard<std::mutex> l(seq_mutex);
-    ++sequences[seq];
 }
 
 void resend_sequence(dmn::stream_t& s) {
     const auto data = s.get_data("seq");
     s.add(data.first, data.second, "seq");
+}
+
+template <unsigned Shift>
+void resend_shifted_sequence(dmn::stream_t& s) {
+    const auto data = s.get_data("seq");
+
+    unsigned seq = 0;
+    const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
+    BOOST_CHECK(res);
+
+    seq += (Shift ? Shift * max_seq + 1 : 0);
+    std::string value = boost::lexical_cast<std::string>(seq);
+    s.add(value.c_str(), value.size(), ("seq" + boost::lexical_cast<std::string>(Shift)).c_str());
 }
 
 } // anonymous namespace
@@ -241,7 +256,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
 }
 
 
-BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
+BOOST_AUTO_TEST_CASE(make_nodes_duplicate_2_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
     const std::string g{R"(
@@ -272,10 +287,10 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
 
 
     //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
-    BOOST_CHECK(sequences == seq_ethalon(1));
+    BOOST_CHECK(sequences == seq_ethalon());
 }
 
-BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
+BOOST_AUTO_TEST_CASE(make_nodes_duplicate_10_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
     const std::string g{R"(
@@ -328,7 +343,41 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
         make_node("c", remember_sequence)
     );
 
-    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon(1));
+    //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
+    BOOST_CHECK(sequences == seq_ethalon());
 }
 
+
+BOOST_AUTO_TEST_CASE(make_nodes_cobine_2_end_to_end) {
+    sequence_counter = 0;
+    sequences.clear();
+    const std::string g{R"(
+        digraph test
+        {
+            a [hosts = "127.0.0.1:44001"];
+            b [hosts = "127.0.0.1:44002"];
+            c [hosts = "127.0.0.1:44003"];
+            d [hosts = "127.0.0.1:44004"];
+            a -> b -> d;
+            a -> c -> d;
+        }
+    )"};
+
+    auto make_node = [g](const char* name, auto callback) {
+        auto node = dmn::make_node(g, name, 0);
+        BOOST_TEST(!!node);
+        node->callback_ = callback;
+        return node;
+    };
+
+    tests::shutdown_nodes(
+        make_node("a", generate_sequence),
+        make_node("b", resend_shifted_sequence<0>),
+        make_node("c", resend_shifted_sequence<1>),
+        make_node("d", remember_sequence)
+    );
+
+
+    std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
+    BOOST_CHECK(sequences == seq_ethalon(max_seq * 2));
+}

@@ -154,7 +154,7 @@ public:
 
             const auto hosts_count = out_vertex.hosts.size();
             pending_writes_.add(hosts_count);
-            edges_.inplace_construct_link(i, edge_id_for_receiver(i));
+            edges_.inplace_construct(i, edge_id_for_receiver(i));
             edges_[i].preinit_links(hosts_count);
             for (std::size_t j = 0; j < hosts_count; ++j) {
                 const auto& host = out_vertex.hosts[j];

@@ -121,7 +121,7 @@ public:
 
     template <class... Args>
     void inplace_construct_link(std::size_t i, Args&&... args) {
-        netlinks_.inplace_construct_link(i, std::forward<Args>(args)...);
+        netlinks_.inplace_construct(i, std::forward<Args>(args)...);
     }
 
     void connect_links() noexcept {
@@ -156,14 +156,12 @@ public:
         link.async_send(std::move(guard), buf);
     }
 
-    bool push_immediate(Packet p) {
-        if (!empty_packet(p)) {
-            data_to_send_.silent_push_front(std::move(p));
-            try_send();
-            return true;
-        }
-        return false;
+    void push_immediate(Packet p) {
+        BOOST_ASSERT_MSG(!empty_packet(p), "Scheduling an empty packet without headers for push_immediate sending. This must not be produced by accepting vertexes");
+        data_to_send_.silent_push_front(std::move(p));
+        try_send();
     }
+
     void push(Packet p) {
         BOOST_ASSERT_MSG(!empty_packet(p), "Scheduling an empy packet without headers for sending. This must not be produced by accepting vertexes");
         data_to_send_.silent_push(std::move(p));
