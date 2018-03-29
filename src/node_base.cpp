@@ -36,6 +36,50 @@ node_base_t::node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_i
     , host_id_(host_id)
 {}
 
+std::uint16_t node_base_t::edge_id_for_receiver(std::uint16_t out_edge_index) {
+    auto edges_out = boost::out_edges(
+        this_node_descriptor,
+        config
+    );
+
+    BOOST_ASSERT_MSG(edges_out.second - edges_out.first >= out_edge_index, "Attempt to get edge_id for receiver failed, because out_edge index is wrong");
+    std::advance(edges_out.first, out_edge_index);
+    const auto out_vertex_desc = boost::target(*edges_out.first, config);
+    const auto edges_in = boost::in_edges(
+        out_vertex_desc,
+        config
+    );
+
+    const auto it = std::find_if(edges_in.first, edges_in.second, [this](graph_t::edge_descriptor edge) {
+        const auto desc = boost::source(edge, config);
+        return desc == this_node_descriptor;
+    });
+    BOOST_ASSERT_MSG(it != edges_in.second, "Failed to find edge_id for receiver");
+    return it - edges_in.first;
+}
+
+std::size_t node_base_t::count_in_edges() const noexcept {
+    const auto edges_in = boost::in_edges(
+        this_node_descriptor,
+        config
+    );
+    const std::size_t edges_in_count = edges_in.second - edges_in.first;
+    BOOST_ASSERT_MSG(edges_in_count > 1, "Incorrect node class used for dealing with muliple out edges. Error in make_node() function");
+
+    return edges_in_count;
+}
+
+std::size_t node_base_t::count_out_edges() const noexcept {
+    const auto edges_out = boost::out_edges(
+        this_node_descriptor,
+        config
+    );
+    const std::size_t edges_out_count = edges_out.second - edges_out.first;
+    BOOST_ASSERT_MSG(edges_out_count > 1, "Incorrect node class used for dealing with muliple out edges. Error in make_node() function");
+
+    return edges_out_count;
+}
+
 packet_t node_base_t::call_callback(packet_t packet) noexcept {
     stream_t s{*this, std::move(packet)};
 

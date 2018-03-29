@@ -16,21 +16,7 @@
 
 namespace dmn {
 
-struct count_in_edges_helper: public virtual node_base_t {
-    std::size_t count_in_edges() const noexcept {
-        const auto edges_in = boost::in_edges(
-            this_node_descriptor,
-            config
-        );
-        const std::size_t edges_in_count = edges_in.second - edges_in.first;
-        BOOST_ASSERT_MSG(edges_in_count > 1, "Incorrect node class used for dealing with muliple out edges. Error in make_node() function");
-
-        return edges_in_count;
-    }
-};
-
-
-class node_impl_read_n: private count_in_edges_helper {
+class node_impl_read_n: private virtual node_base_t {
     boost::asio::ip::tcp::acceptor  acceptor_;
     boost::asio::ip::tcp::socket    new_socket_;
 
@@ -132,14 +118,14 @@ class node_impl_read_n: private count_in_edges_helper {
         auto p = std::move(link.packet);
         link.async_read(link.packet.header_mutable_buffer());
 
-/*      // TODO: stopped here:
- *           Make sure that wawe_id is correctly transfered
- *           edge_id is NOT correct. Fix in ALL the writing setups
+        // TODO: stopped here:
+        //      Make sure that wawe_id is correctly transfered
+        //      edge_id is NOT correct. Fix in ALL the writing setups
         auto res = packs_.combine_packets(std::move(p));
         if (res) {
             on_packet_accept(std::move(*res).to_native());
-        }*/
-        on_packet_accept(std::move(p).to_native());
+        }
+        //on_packet_accept(std::move(p).to_native());
     }
 
     void start_accept() {
@@ -150,8 +136,7 @@ class node_impl_read_n: private count_in_edges_helper {
 
 public:
     node_impl_read_n()
-        : count_in_edges_helper()
-        , acceptor_(
+        : acceptor_(
             ios(),
             boost::asio::ip::tcp::endpoint(
                 boost::asio::ip::address::from_string(
@@ -161,7 +146,7 @@ public:
             )
         )
         , new_socket_(ios())
-        , edges_count_(count_in_edges_helper::count_in_edges())
+        , edges_count_(count_in_edges())
         , edges_(boost::make_unique<edge_t[]>(edges_count_))
         , packs_(edges_count_)
     {

@@ -84,27 +84,14 @@ public:
     }
 };
 
-struct count_out_edges_helper: public virtual node_base_t {
-    std::size_t count_out_edges() const noexcept {
-        const auto edges_out = boost::out_edges(
-            this_node_descriptor,
-            config
-        );
-        const std::size_t edges_out_count = edges_out.second - edges_out.first;
-        BOOST_ASSERT_MSG(edges_out_count > 1, "Incorrect node class used for dealing with muliple out edges. Error in make_node() function");
-
-        return edges_out_count;
-    }
-};
-
-class node_impl_write_n: public count_out_edges_helper {
+class node_impl_write_n: public virtual node_base_t {
     work_counter_t                  pending_writes_;
 
     using edge_t = edge_out_t<std::pair<packet_header_t, boost::asio::const_buffer>>;
     using link_t = edge_t::link_t;
 
     const std::size_t               edges_count_;
-    const std::unique_ptr<edge_t[]> edges_;
+    lazy_array<edge_t>              edges_;
 
     counted_packets_storage         packets_;
 
@@ -152,11 +139,11 @@ class node_impl_write_n: public count_out_edges_helper {
 
 public:
     node_impl_write_n()
-        : count_out_edges_helper{}
-        , edges_count_(count_out_edges_helper::count_out_edges())
-        , edges_(boost::make_unique<edge_t[]>(edges_count_))
+        : edges_count_(count_out_edges())
         , packets_(edges_count_)
     {
+        edges_.init(edges_count_);
+
         auto edges_it = boost::out_edges(
             this_node_descriptor,
             config
@@ -167,6 +154,7 @@ public:
 
             const auto hosts_count = out_vertex.hosts.size();
             pending_writes_.add(hosts_count);
+            edges_.inplace_construct_link(i, edge_id_for_receiver(i));
             edges_[i].preinit_links(hosts_count);
             for (std::size_t j = 0; j < hosts_count; ++j) {
                 const auto& host = out_vertex.hosts[j];

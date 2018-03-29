@@ -48,7 +48,9 @@ class node_impl_write_1: public virtual node_base_t {
     }
 
 public:
-    node_impl_write_1() {
+    node_impl_write_1()
+        : edge_(edge_id_for_receiver())
+    {
         const auto edges_out = boost::out_edges(
             this_node_descriptor,
             config

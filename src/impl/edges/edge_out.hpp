@@ -17,8 +17,10 @@ struct edge_out_t {
 
 private:
     std::atomic_uintmax_t   last_used_link{0};
-    netlinks_t              netlinks_; // `const` after set_links()
-    queue_t                 data_to_send_;
+    netlinks_t              netlinks_{}; // `const` after set_links()
+    queue_t                 data_to_send_{};
+    const std::uint16_t     edge_id_for_receiver_;
+
 
     template <class Link>
     static boost::asio::const_buffers_1 get_buf(netlink_t<packet_network_t, Link>& link, packet_network_t v) noexcept {
@@ -100,6 +102,10 @@ private:
     }
 
 public:
+    explicit edge_out_t(std::uint16_t edge_id_for_receiver)
+        : edge_id_for_receiver_(edge_id_for_receiver)
+    {}
+
     static link_t& link_from_guard(const tcp_write_proto_t::guard_t& guard) noexcept {
         BOOST_ASSERT_MSG(guard, "Empty link guard");
         return static_cast<link_t&>(*guard.mutex());

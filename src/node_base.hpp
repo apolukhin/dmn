@@ -30,6 +30,11 @@ public:
     // Functions:
     node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_id);
 
+
+    std::uint16_t edge_id_for_receiver(std::uint16_t out_edge_index = 0);
+    std::size_t count_in_edges() const noexcept;
+    std::size_t count_out_edges() const noexcept;
+
     virtual void on_packet_accept(packet_t packet) = 0;
     packet_t call_callback(packet_t packet) noexcept;
     virtual ~node_base_t() noexcept;

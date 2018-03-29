@@ -1,6 +1,6 @@
 #pragma once
 
-#include "node.hpp"
+#include "node_base.hpp"
 
 namespace dmn {
 
@@ -20,7 +20,7 @@ public:
         }
     }
 
-    void on_stop_writing() noexcept override final {
+    void on_stop_writing() noexcept final {
         if (!pending_writes_.get()) {
             no_more_writers();
         }
