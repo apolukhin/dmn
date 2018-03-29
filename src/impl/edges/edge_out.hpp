@@ -51,7 +51,6 @@ private:
         };
     }
 
-public:
     static bool empty_packet(boost::asio::const_buffer buf) noexcept {
         return boost::asio::buffer_size(buf) == 0;
     }

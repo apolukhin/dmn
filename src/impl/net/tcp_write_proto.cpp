@@ -14,9 +14,18 @@ namespace dmn {
     /**/
 
 
-tcp_write_proto_t::tcp_write_proto_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished, std::size_t helper_id)
+tcp_write_proto_t::tcp_write_proto_t(
+    const char* addr,
+    unsigned short port,
+    boost::asio::io_service& ios,
+    on_send_error_t on_send_error,
+    on_operation_finished_t on_operation_finished,
+    on_reconnect_error_t on_reconnect_error,
+    std::size_t helper_id
+)
     : socket_(ios)
-    , on_error_(std::move(on_error))
+    , on_send_error_(std::move(on_send_error))
+    , on_reconnect_error_(std::move(on_reconnect_error))
     , on_operation_finished_(std::move(on_operation_finished))
     , remote_ep_{boost::asio::ip::address::from_string(addr), port}
     , helper_id_(helper_id)
@@ -28,7 +37,7 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     ASSERT_GUARD(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
         if (e) {
-            on_error_(e, std::move(guard));
+            on_reconnect_error_(e, std::move(guard), {});
             return;
         }
 
@@ -51,7 +60,7 @@ void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buff
 
     auto on_write = [guard = std::move(g), buf, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
-            on_error_(e, std::move(guard));
+            on_send_error_(e, std::move(guard), {});
             return;
         }
         BOOST_ASSERT_MSG(boost::asio::buffer_size(buf) == bytes_written, "Wrong bytes count written");

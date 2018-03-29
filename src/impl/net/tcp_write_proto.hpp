@@ -13,12 +13,17 @@ namespace dmn {
 class tcp_write_proto_t {
     DMN_PINNED(tcp_write_proto_t);
 public:
+    struct reconnect_error_tag{};
+    struct send_error_tag{};
     using guard_t = std::unique_lock<tcp_write_proto_t>;
 
 private:
     boost::asio::ip::tcp::socket socket_;
-    using on_error_t = std::function<void(const boost::system::error_code&, guard_t )>;
-    const on_error_t on_error_;
+    using on_send_error_t = std::function<void(boost::system::error_code, guard_t, send_error_tag)>;
+    const on_send_error_t on_send_error_;
+
+    using on_reconnect_error_t = std::function<void(boost::system::error_code, guard_t, reconnect_error_tag)>;
+    const on_reconnect_error_t on_reconnect_error_;
 
     using on_operation_finished_t = std::function<void(guard_t )>;
     const on_operation_finished_t on_operation_finished_;
@@ -30,7 +35,15 @@ private:
     slab_allocator_t slab_;
 
 protected:
-    tcp_write_proto_t(const char* addr, unsigned short port, boost::asio::io_service& ios, on_error_t on_error, on_operation_finished_t on_operation_finished, std::size_t helper_id = 0);
+    tcp_write_proto_t(
+        const char* addr,
+        unsigned short port,
+        boost::asio::io_service& ios,
+        on_send_error_t on_send_error,
+        on_operation_finished_t on_operation_finished,
+        on_reconnect_error_t on_reconnect_error,
+        std::size_t helper_id = 0
+    );
     ~tcp_write_proto_t();
 
 public:

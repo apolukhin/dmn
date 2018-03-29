@@ -50,16 +50,23 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
 
     using netlink_out_t = dmn::netlink_t<int, dmn::tcp_write_proto_t>;
     std::unique_ptr<netlink_out_t> netlink_out = netlink_out_t::construct("127.0.0.1", 63101, dmn::node_t::ios(),
-        [&](const boost::system::error_code&, auto g) {
+        [&](const boost::system::error_code&, auto g, dmn::tcp_write_proto_t::send_error_tag) {
             BOOST_TEST(static_cast<bool>(g));
-            auto* l = g.mutex();
+            BOOST_TEST(false);
+            /*auto* l = g.mutex();
             BOOST_TEST(l == netlink_out.get());
-            l->async_reconnect(std::move(g));
+            l->async_reconnect(std::move(g));*/
         },
         [&](auto g) {
             if (sended) return;
             sended = true;
             netlink_out->async_send(std::move(g), packet_network.const_buffer());
+        },
+        [&](const boost::system::error_code&, auto g, dmn::tcp_write_proto_t::reconnect_error_tag) {
+            BOOST_TEST(static_cast<bool>(g));
+            auto* l = g.mutex();
+            BOOST_TEST(l == netlink_out.get());
+            l->async_reconnect(std::move(g));
         }
     );
     netlink_out->async_reconnect(netlink_out->try_lock());

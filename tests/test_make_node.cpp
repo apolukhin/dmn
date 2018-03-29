@@ -343,7 +343,7 @@ BOOST_AUTO_TEST_CASE(make_nodes_duplicate_10_end_to_end) {
         make_node("c", remember_sequence)
     );
 
-    std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
+    //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
     BOOST_CHECK(sequences == seq_ethalon());
 }
 
