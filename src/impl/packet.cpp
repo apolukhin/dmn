@@ -65,7 +65,7 @@ std::pair<const unsigned char*, std::size_t> packet_t::get_data(const char* type
         std::uint32_t current_data_len; // intentionally unintialized
         std::memcpy(&current_data_len, data, sizeof(std::uint32_t));
         data += sizeof(std::uint32_t);
-        BOOST_ASSERT_MSG(data < data_end, "Data overflow after getting message");
+        BOOST_ASSERT_MSG(data <= data_end, "Data overflow after getting message");
 
         if (found) {
             return {data, current_data_len};

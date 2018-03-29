@@ -54,7 +54,7 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
             BOOST_TEST(static_cast<bool>(g));
             auto* l = g.mutex();
             BOOST_TEST(l == netlink_out.get());
-            l->async_connect(std::move(g));
+            l->async_reconnect(std::move(g));
         },
         [&](auto g) {
             if (sended) return;
@@ -62,7 +62,7 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
             netlink_out->async_send(std::move(g), packet_network.const_buffer());
         }
     );
-    netlink_out->async_connect(netlink_out->try_lock());
+    netlink_out->async_reconnect(netlink_out->try_lock());
 
     dmn::node_t::ios().reset();
     dmn::node_t::ios().poll();

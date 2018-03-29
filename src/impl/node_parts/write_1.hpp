@@ -22,23 +22,27 @@ class node_impl_write_1: public virtual node_base_t {
 
     void on_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
         auto& link = edge_t::link_from_guard(guard);
-        auto p = std::move(link.packet);
-        edge_.push_immediate(std::move(p));
+        // TODO: async log issue
 
-        if (state() == node_state::RUN) {
-            edge_.try_send();
-            link.async_connect(std::move(guard)); // TODO: dealy?
+        if (state() != node_state::RUN) {
+            // Drop the write task on the floor.
+            pending_writes_.remove();
+            link.close(std::move(guard));
+            on_stop_writing();
             return;
         }
 
-        pending_writes_.remove();
-        link.close(std::move(guard));
-        on_stop_writing();
-        // TODO: log issue
+        link.async_reconnect(std::move(guard)); // TODO: dealy?
+
+        auto p = std::move(link.packet);
+        if (!edge_t::empty_packet(p)) {
+            pending_writes_.add();
+            edge_.push_immediate(std::move(p));
+        }
     }
 
     void on_operation_finished(tcp_write_proto_t::guard_t&& guard) {
-        started_at_least_1_link_.store(true, std::memory_order_relaxed);
+        started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
         pending_writes_.remove();
         edge_.try_steal_work(std::move(guard));
     }
@@ -69,13 +73,13 @@ public:
         edge_.connect_links();
     }
 
-    void on_stop_writing() noexcept override final {
+    void on_stop_writing() noexcept final {
         if (!pending_writes_.get()) {
             no_more_writers();
         }
     }
 
-    void on_stoped_writing() noexcept override final {
+    void on_stoped_writing() noexcept final {
         BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
 
         edge_.assert_no_more_data();
@@ -88,9 +92,6 @@ public:
         packet_t data = call_callback(std::move(packet));
 
         edge_.push(packet_network_t{std::move(data)});
-
-        // Rechecking for case when write operation was finished before we pushed into the data_to_send_
-        edge_.try_send();
     }
 
     ~node_impl_write_1() noexcept {

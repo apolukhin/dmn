@@ -34,7 +34,7 @@ protected:
     ~tcp_write_proto_t();
 
 public:
-    void async_connect(guard_t g);
+    void async_reconnect(guard_t g);
 
     std::size_t helper_id() const noexcept {
         return helper_id_;
@@ -49,7 +49,6 @@ public:
 
     // Closes the socket and leaves the link in locked state
     void close(guard_t g) noexcept;
-
 
     guard_t try_lock() noexcept;
     void unlock() noexcept;

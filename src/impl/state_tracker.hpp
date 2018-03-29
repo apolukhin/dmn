@@ -60,7 +60,7 @@ public:
     }
 
     node_state state() const noexcept {
-        return state_.load(std::memory_order_relaxed);
+        return state_.load();
     }
 };
 

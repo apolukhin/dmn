@@ -120,22 +120,28 @@ class node_impl_write_n: public count_out_edges_helper {
     void on_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
         BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
         auto& link = edge_t::link_from_guard(guard);
-        auto p = std::move(link.packet);
-        auto& edge = edges_[link.helper_id()];
-        edge.push_immediate(std::move(p));
+        // TODO: async log issue
 
-        if (state() == node_state::RUN) {
-            edge.try_send();
-            link.async_connect(std::move(guard)); // TODO: dealy?
+        if (state() != node_state::RUN) {
+            // Drop the write task on the floor.
+            pending_writes_.remove();
+            link.close(std::move(guard));
+            on_stop_writing();
             return;
         }
 
-        link.close(std::move(guard));
-        // TODO: log issue
+        link.async_reconnect(std::move(guard)); // TODO: dealy?
+
+        auto p = std::move(link.packet);
+        if (!edge_t::empty_packet(p)) {
+            pending_writes_.add();
+            auto& edge = edges_[link.helper_id()];
+            edge.push_immediate(std::move(p));
+        }
     }
 
     void on_operation_finished(tcp_write_proto_t::guard_t&& guard) {
-        started_at_least_1_link_.store(true, std::memory_order_relaxed);
+        started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
         pending_writes_.remove();
 
         auto& link = edge_t::link_from_guard(guard);
@@ -178,13 +184,13 @@ public:
         }
     }
 
-    void on_stop_writing() noexcept override final {
+    void on_stop_writing() noexcept final {
         if (!pending_writes_.get()) {
             no_more_writers();
         }
     }
 
-    void on_stoped_writing() noexcept override final {
+    void on_stoped_writing() noexcept  final {
         BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
         BOOST_ASSERT_MSG(!packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");
 
@@ -194,7 +200,7 @@ public:
         });
     }
 
-    void on_packet_accept(packet_t packet) override final {
+    void on_packet_accept(packet_t packet) final {
         pending_writes_.add(edges_count_);
 
         BOOST_ASSERT_MSG(!packet.empty(), "Attempt to send an empty packet, even without a header");
@@ -210,12 +216,10 @@ public:
             header_cpy.edge_id = i; // TODO: big/little endian
 
             edge.push({header_cpy, body});
-            // Rechecking for case when write operation was finished before we pushed into the data_to_send_
-            edge.try_send();
         }
     }
 
-    ~node_impl_write_n() noexcept  {
+    ~node_impl_write_n() noexcept override {
         const bool soft_shutdown = started_at_least_1_link_.load();
 
         for_each_edge([soft_shutdown](edge_t& edge) {

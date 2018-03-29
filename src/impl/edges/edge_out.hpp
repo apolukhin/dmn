@@ -49,6 +49,7 @@ private:
         };
     }
 
+public:
     static bool empty_packet(boost::asio::const_buffer buf) noexcept {
         return boost::asio::buffer_size(buf) == 0;
     }
@@ -61,6 +62,7 @@ private:
         return false;
     }
 
+private:
     template <class Container>
     struct round_robin_balancer_t {
         Container&             c_;
@@ -77,42 +79,6 @@ private:
 
     round_robin_balancer_t<netlinks_t> links_balancer() noexcept {
         return round_robin_balancer_t<netlinks_t>{netlinks_, last_used_link.fetch_add(1, std::memory_order_relaxed)};
-    }
-
-public:
-    static link_t& link_from_guard(const tcp_write_proto_t::guard_t& guard) noexcept {
-        BOOST_ASSERT_MSG(guard, "Empty link guard");
-        return static_cast<link_t&>(*guard.mutex());
-    }
-
-    void preinit_links(std::size_t count) {
-        netlinks_.init(count);
-    }
-
-    template <class... Args>
-    void inplace_construct_link(std::size_t i, Args&&... args) {
-        netlinks_.inplace_construct_link(i, std::forward<Args>(args)...);
-    }
-
-    void connect_links() noexcept {
-        for (auto& v : netlinks_) {
-            v.async_connect(v.try_lock());
-        }
-    }
-
-    void assert_no_more_data() noexcept {
-        BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
-    }
-
-    void close_links() noexcept {
-        for (auto& v: links_balancer()) {
-            tcp_write_proto_t::guard_t lock = v.try_lock();
-            if (lock) {
-                v.close(std::move(lock));
-            } else {
-                // Link is already closed // TODO: validate
-            }
-        }
     }
 
     void try_send() {
@@ -133,6 +99,42 @@ public:
         }
     }
 
+public:
+    static link_t& link_from_guard(const tcp_write_proto_t::guard_t& guard) noexcept {
+        BOOST_ASSERT_MSG(guard, "Empty link guard");
+        return static_cast<link_t&>(*guard.mutex());
+    }
+
+    void preinit_links(std::size_t count) {
+        netlinks_.init(count);
+    }
+
+    template <class... Args>
+    void inplace_construct_link(std::size_t i, Args&&... args) {
+        netlinks_.inplace_construct_link(i, std::forward<Args>(args)...);
+    }
+
+    void connect_links() noexcept {
+        for (auto& v : netlinks_) {
+            v.async_reconnect(v.try_lock());
+        }
+    }
+
+    void assert_no_more_data() noexcept {
+        BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
+    }
+
+    void close_links() noexcept {
+        for (auto& v: links_balancer()) {
+            tcp_write_proto_t::guard_t lock = v.try_lock();
+            if (lock) {
+                v.close(std::move(lock));
+            } else {
+                // Link is already closed // TODO: validate
+            }
+        }
+    }
+
     void try_steal_work(tcp_write_proto_t::guard_t&& guard) {
         auto v = data_to_send_.try_pop();
         if (!v) {
@@ -144,14 +146,18 @@ public:
         link.async_send(std::move(guard), buf);
     }
 
-    void push_immediate(Packet p) {
+    bool push_immediate(Packet p) {
         if (!empty_packet(p)) {
             data_to_send_.silent_push_front(std::move(p));
+            try_send();
+            return true;
         }
+        return false;
     }
     void push(Packet p) {
         BOOST_ASSERT_MSG(!empty_packet(p), "Scheduling an empy packet without headers for sending. This must not be produced by accepting vertexes");
         data_to_send_.silent_push(std::move(p));
+        try_send(); // Rechecking for case when some write operation was finished before we pushed into the data_to_send_
     }
 };
 

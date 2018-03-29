@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <limits>
 #include <boost/assert.hpp>
 
 #include "utility.hpp"
@@ -25,7 +26,7 @@ public:
     }
 
     auto remove(const std::size_t work_count = 1) noexcept {
-        BOOST_ASSERT_MSG(work_count > 0, "Attempt to add 0 work");
+        BOOST_ASSERT_MSG(work_count > 0, "Attempt to remove 0 work");
 
         const auto work = works_.fetch_sub(work_count, std::memory_order_release);
         BOOST_ASSERT_MSG(work >= work_count, "Counter overflow");

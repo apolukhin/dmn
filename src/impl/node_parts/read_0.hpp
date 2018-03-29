@@ -14,7 +14,7 @@ class node_impl_read_0: public virtual node_base_t {
 
     wave_id_t new_wave() noexcept {
         constexpr std::uint32_t shift = (sizeof(wave_id_t) - sizeof(host_id_)) * CHAR_BIT;
-        const std::uint32_t subwave = subwave_id_.load(std::memory_order_relaxed);
+        const std::uint32_t subwave = subwave_id_.fetch_add(1, std::memory_order_relaxed);
         const std::uint32_t res = (host_id_ << shift) | subwave;
         return static_cast<wave_id_t>(res);
     }
@@ -37,11 +37,11 @@ public:
         start(); // TODO: mutithreaded run
     }
 
-    void on_stop_reading() noexcept override final {
+    void on_stop_reading() noexcept final {
         // Noop
     }
 
-    ~node_impl_read_0() noexcept = default;
+    ~node_impl_read_0() noexcept override = default;
 };
 
 }

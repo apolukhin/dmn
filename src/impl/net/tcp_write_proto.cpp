@@ -24,7 +24,7 @@ tcp_write_proto_t::tcp_write_proto_t(const char* addr, unsigned short port, boos
 
 tcp_write_proto_t::~tcp_write_proto_t() = default;
 
-void tcp_write_proto_t::async_connect(tcp_write_proto_t::guard_t g) {
+void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     ASSERT_GUARD(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
         if (e) {
@@ -71,8 +71,8 @@ void tcp_write_proto_t::close(guard_t g) noexcept {
     socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
     socket_.close(ignore);
     g.release(); // leaving link in locked state
-    BOOST_ASSERT_MSG(write_lock_.load(std::memory_order_relaxed) != 0, "After close the connection is not locked");
-    BOOST_ASSERT_MSG(write_lock_.load(std::memory_order_relaxed) == 1, "After close the connection is locked multiple times");
+    BOOST_ASSERT_MSG(write_lock_.load() != 0, "After close the connection is not locked");
+    BOOST_ASSERT_MSG(write_lock_.load() == 1, "After close the connection is locked multiple times");
 }
 
 tcp_write_proto_t::guard_t tcp_write_proto_t::try_lock() noexcept {
