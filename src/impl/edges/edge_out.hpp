@@ -59,7 +59,7 @@ private:
         return p.empty();
     }
 
-    static bool empty_packet(const std::pair<packet_header_t, boost::asio::const_buffer>& p) noexcept {
+    static bool empty_packet(const std::pair<packet_header_t, boost::asio::const_buffer>& /*p*/) noexcept {
         return false;
     }
 

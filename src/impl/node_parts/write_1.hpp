@@ -18,9 +18,10 @@ class node_impl_write_1: public virtual node_base_t {
     using edge_t = edge_out_t<packet_network_t>;
     using link_t = edge_t::link_t;
     edge_t                          edge_;
+
     std::atomic<bool>               started_at_least_1_link_{false};
 
-    void reconnect_if_running(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
+    void reconnect_if_running(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
         auto& link = edge_t::link_from_guard(guard);
         // TODO: async log issue
@@ -36,7 +37,7 @@ class node_impl_write_1: public virtual node_base_t {
         link.async_reconnect(std::move(guard)); // TODO: dealy?
     }
 
-    void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
+    void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         auto& link = edge_t::link_from_guard(guard);
         auto p = std::move(link.packet);
         pending_writes_.add();
@@ -45,7 +46,7 @@ class node_impl_write_1: public virtual node_base_t {
         reconnect_if_running(e, std::move(guard));
     }
 
-    void on_operation_finished(tcp_write_proto_t::guard_t&& guard) {
+    void on_operation_finished(tcp_write_proto_t::guard_t guard) {
         started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
         pending_writes_.remove();
         edge_.try_steal_work(std::move(guard));
@@ -93,7 +94,7 @@ public:
         edge_.close_links();
     }
 
-    void on_packet_accept(packet_t packet) override final {
+    void on_packet_accept(packet_t packet) final {
         pending_writes_.add();
 
         packet_t data = call_callback(std::move(packet));
@@ -102,7 +103,7 @@ public:
         edge_.push(packet_network_t{std::move(data)});
     }
 
-    ~node_impl_write_1() noexcept {
+    ~node_impl_write_1() noexcept override {
         const bool soft_shutdown = started_at_least_1_link_.load();
         if (soft_shutdown) {
             edge_.assert_no_more_data();

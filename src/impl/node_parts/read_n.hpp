@@ -16,7 +16,7 @@
 
 namespace dmn {
 
-class node_impl_read_n: private virtual node_base_t {
+class node_impl_read_n: public virtual node_base_t {
     boost::asio::ip::tcp::acceptor  acceptor_;
     boost::asio::ip::tcp::socket    new_socket_;
 
@@ -118,14 +118,10 @@ class node_impl_read_n: private virtual node_base_t {
         auto p = std::move(link.packet);
         link.async_read(link.packet.header_mutable_buffer());
 
-        // TODO: stopped here:
-        //      Make sure that wawe_id is correctly transfered
-        //      edge_id is NOT correct. Fix in ALL the writing setups
         auto res = packs_.combine_packets(std::move(p));
         if (res) {
             on_packet_accept(std::move(*res).to_native());
         }
-        //on_packet_accept(std::move(p).to_native());
     }
 
     void start_accept() {
@@ -153,7 +149,7 @@ public:
         start_accept();
     }
 
-    void on_stop_reading() noexcept override final {
+    void on_stop_reading() noexcept final {
         acceptor_.cancel();
 
         std::size_t links_count = 0;

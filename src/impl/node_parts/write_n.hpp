@@ -97,14 +97,7 @@ class node_impl_write_n: public virtual node_base_t {
 
     std::atomic<bool>               started_at_least_1_link_{false};
 
-    template <class F>
-    void for_each_edge(F f) {
-        for (std::size_t i = 0; i < edges_count_; ++i) {
-            f(edges_[i]);
-        }
-    }
-
-    void reconnect_if_running(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
+    void reconnect_if_running(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
         auto& link = edge_t::link_from_guard(guard);
         // TODO: async log issue
@@ -120,7 +113,7 @@ class node_impl_write_n: public virtual node_base_t {
         link.async_reconnect(std::move(guard)); // TODO: dealy?
     }
 
-    void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t&& guard) {
+    void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         auto& link = edge_t::link_from_guard(guard);
         auto p = std::move(link.packet);
         pending_writes_.add();
@@ -130,7 +123,7 @@ class node_impl_write_n: public virtual node_base_t {
         reconnect_if_running(e, std::move(guard));
     }
 
-    void on_operation_finished(tcp_write_proto_t::guard_t&& guard) {
+    void on_operation_finished(tcp_write_proto_t::guard_t guard) {
         started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
         pending_writes_.remove();
 
@@ -186,10 +179,10 @@ public:
         BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
         BOOST_ASSERT_MSG(!packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");
 
-        for_each_edge([](auto& edge){
+        for (auto& edge: edges_) {
             edge.assert_no_more_data();
             edge.close_links();
-        });
+        }
     }
 
     void on_packet_accept(packet_t packet) final {
@@ -202,8 +195,7 @@ public:
         packet_network_t data{ std::move(response_packet) };
         const auto body = packets_.add_packet(std::move(data));
 
-        for (std::size_t i = 0; i < edges_count_; ++i) {
-            edge_t& edge = edges_[i];
+        for (auto& edge: edges_) {
             auto header_cpy = header;
             header_cpy.edge_id = edge.edge_id_for_receiver(); // TODO: big/little endian
 
@@ -214,13 +206,13 @@ public:
     ~node_impl_write_n() noexcept override {
         const bool soft_shutdown = started_at_least_1_link_.load();
 
-        for_each_edge([soft_shutdown](edge_t& edge) {
+        for (auto& edge: edges_) {
             if (soft_shutdown) {
                 edge.assert_no_more_data();
             }
 
             edge.close_links();
-        });
+        }
 
         BOOST_ASSERT_MSG(!soft_shutdown || !pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
         BOOST_ASSERT_MSG(!soft_shutdown || !packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");

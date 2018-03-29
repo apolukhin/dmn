@@ -17,11 +17,11 @@ public:
     explicit packet_network_t(packet_t&& n) noexcept;
 
     boost::asio::const_buffers_1 header_const_buffer() noexcept {
-        return boost::asio::const_buffers_1(reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t));
+        return {reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t)};
     }
     boost::asio::mutable_buffers_1 header_mutable_buffer() noexcept {
         place_header();
-        return boost::asio::mutable_buffers_1(reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t));
+        return {reinterpret_cast<unsigned char*>(&header()), sizeof(packet_header_t)};
     }
 
     boost::asio::mutable_buffers_1 body_mutable_buffer() {
