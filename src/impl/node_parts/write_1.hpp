@@ -92,6 +92,7 @@ public:
         pending_writes_.add();
 
         packet_t data = call_callback(std::move(packet));
+        data.header().edge_id = edge_.edge_id_for_receiver();
 
         edge_.push(packet_network_t{std::move(data)});
     }

@@ -201,7 +201,7 @@ public:
         for (std::size_t i = 0; i < edges_count_; ++i) {
             edge_t& edge = edges_[i];
             auto header_cpy = header;
-            header_cpy.edge_id = i; // TODO: big/little endian
+            header_cpy.edge_id = edge.edge_id_for_receiver(); // TODO: big/little endian
 
             edge.push({header_cpy, body});
         }

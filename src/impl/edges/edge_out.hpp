@@ -106,6 +106,10 @@ public:
         : edge_id_for_receiver_(edge_id_for_receiver)
     {}
 
+    std::uint16_t edge_id_for_receiver() const noexcept {
+        return edge_id_for_receiver_;
+    }
+
     static link_t& link_from_guard(const tcp_write_proto_t::guard_t& guard) noexcept {
         BOOST_ASSERT_MSG(guard, "Empty link guard");
         return static_cast<link_t&>(*guard.mutex());

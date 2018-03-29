@@ -241,7 +241,6 @@ BOOST_AUTO_TEST_CASE(make_nodes_chain_end_to_end) {
 }
 
 
-// TODO: this test is wrong! It is temporary, just to test write_n node
 BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
@@ -272,11 +271,10 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_2_end_to_end) {
     );
 
 
-    std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
-    BOOST_CHECK(sequences == seq_ethalon(2));
+    //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
+    BOOST_CHECK(sequences == seq_ethalon(1));
 }
 
-// TODO: this test is wrong! It is temporary, just to test write_n node
 BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
@@ -331,6 +329,6 @@ BOOST_AUTO_TEST_CASE(make_nodes_broadcast_10_end_to_end) {
     );
 
     //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon(10));
+    BOOST_CHECK(sequences == seq_ethalon(1));
 }
 
