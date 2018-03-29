@@ -150,7 +150,7 @@ public:
         ).first;
 
         for (std::size_t i = 0; i < edges_count_; ++i, ++edges_it) {
-            const vertex_t& out_vertex = config[target(*edges_it, config)];
+            const vertex_t& out_vertex = config[boost::target(*edges_it, config)];
 
             const auto hosts_count = out_vertex.hosts.size();
             pending_writes_.add(hosts_count);

@@ -54,6 +54,7 @@ public:
             return result;
         }
 
+        it->second.second.merge_packet(std::move(p));
         edge_counter.insert(ins_it, edge_id);
         if (edge_counter.size() == edges_count_) {
             result.emplace(std::move(it->second.second));
