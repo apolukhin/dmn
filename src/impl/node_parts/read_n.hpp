@@ -59,7 +59,7 @@ class node_impl_read_n: public virtual node_base_t {
         void cancel() {
             std::lock_guard<std::mutex> lock{unknown_links_mutex_};
             for (auto& l : unknown_links_) {
-                l->close_links();
+                l->close();
             }
         }
     } unknown_links_;
