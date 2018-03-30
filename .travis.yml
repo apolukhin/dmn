@@ -20,8 +20,8 @@ env:
         - IGNORE_COVERAGE='*/boost-local/*'
 
     matrix:
-        - CXXFLAGS="--coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
-        - CXXFLAGS="-Wno-c++11-narrowing -std=c++14" CXX=clang++-3.9 TOOLSET=clang-3.9
+        - CXXFLAGS="--coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
+        - CXXFLAGS="-Wno-c++11-narrowing -std=c++14" CC=clang-3.9 CXX=clang++-3.9 TOOLSET=clang-3.9
 
 ###############################################################################################################
 # From this point and below code is same for all the Boost libs
@@ -79,9 +79,9 @@ script:
 
 after_success:
     - mkdir -p $TRAVIS_BUILD_DIR/coverals
-    - wget https://github.com/linux-test-project/lcov/archive/v1.12.zip
-    - unzip v1.12.zip
-    - LCOV="`pwd`/lcov-1.12/bin/lcov $GCOV"
+    - wget https://github.com/linux-test-project/lcov/archive/v1.13.zip
+    - unzip v1.13.zip
+    - LCOV="`pwd`/lcov-1.13/bin/lcov $GCOV"
 
     - find Chapter*/* -type d -exec $LCOV --directory "{}" --base-directory ./"{}" --capture --output-file "{}"/tmp_coverage.info \;
 
