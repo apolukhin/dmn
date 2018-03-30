@@ -74,7 +74,7 @@ before_install:
 script:
     - cmake -DCMAKE_BUILD_TYPE=Debug -DBOOST_ROOT=$BOOST .
     - make -j4
-    - ./dmn_test
+    - ./dmn_tests
 
 
 after_success:
