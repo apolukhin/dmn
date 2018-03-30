@@ -72,7 +72,7 @@ before_install:
     - cd $PROJECT_DIR
 
 script:
-    - cmake -DCMAKE_BUILD_TYPE=Release -DBOOST_PATH=$BOOST .
+    - cmake -DCMAKE_BUILD_TYPE=Debug -DBOOST_ROOT=$BOOST .
     - make -j4
     - ./dmn_test
 
