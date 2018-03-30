@@ -55,6 +55,13 @@ class node_impl_read_n: public virtual node_base_t {
             std::lock_guard<std::mutex> lock{unknown_links_mutex_};
             unknown_links_.push_back(std::move(l));
         }
+        
+        void cancel() {
+            std::lock_guard<std::mutex> lock{unknown_links_mutex_};
+            for (auto& l : unknown_links_) {
+                l->.close_links();
+            }
+        }
     } unknown_links_;
 
 
@@ -164,6 +171,7 @@ public:
 
     ~node_impl_read_n() noexcept {
         acceptor_.cancel();
+        unknown_links_.cancel();
 
         std::size_t links_count = 0;
         for_each_edge([&links_count](auto& e){
