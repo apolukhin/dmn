@@ -21,7 +21,8 @@ env:
 
     matrix:
         - CXXFLAGS="-fuse-ld=gold --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
-        - CXXFLAGS="-Wno-c++11-narrowing --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=clang-6.0 CXX=clang++-6.0 TOOLSET=clang-6.0
+        - CXXFLAGS="-fuse-ld=gold-fsanitize=thread" LDFLAGS="-ltsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
+        - CXXFLAGS="-Wno-c++11-narrowing --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -fsanitize=address,leak,undefined" CC=clang-6.0 CXX=clang++-6.0 TOOLSET=clang-6.0
 
 ###############################################################################################################
 # From this point and below code is same for all the Boost libs
