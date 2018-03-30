@@ -10,9 +10,6 @@
 
 
 sudo: false
-language: cpp
-compiler:
-    - gcc
 
 os:
     - linux
@@ -23,8 +20,8 @@ env:
         - IGNORE_COVERAGE='*/boost-local/*'
 
     matrix:
-        - CXXFLAGS="--coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CXX=g++-7 GCOV="--gcov-tool gcov-7"
-        - CXXFLAGS="-Wno-c++11-narrowing -std=c++14" CXX=clang++-3.9
+        - CXXFLAGS="--coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
+        - CXXFLAGS="-Wno-c++11-narrowing -std=c++14" CXX=clang++-3.9 TOOLSET=clang-3.9
 
 ###############################################################################################################
 # From this point and below code is same for all the Boost libs
@@ -71,7 +68,7 @@ before_install:
     - git status
     - ./bootstrap.sh
     - ./b2 headers
-    - ./b2 -j4 toolset=$TOOLSET address-model=64 architecture=x86 link=shared --with-program_options --with-filesystem --with-system --with-test --with-atomic --with-thread --with-timer --with-chrono --with-regex --with-random --with-context stage
+    - ./b2 -j4 toolset=$TOOLSET address-model=64 architecture=x86 link=shared --with-program_options --with-filesystem --with-system --with-test --with-atomic --with-thread --with-timer --with-chrono --with-regex --with-random --with-graph stage
     - cd $PROJECT_DIR
 
 script:
