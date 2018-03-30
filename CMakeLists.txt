@@ -10,7 +10,9 @@ endif ()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
 # Boost setup
-set(BOOST_ROOT "/data/boost")
+if (NOT BOOST_ROOT)
+    Set(BOOST_ROOT "/data/boost")
+endif()
 add_definitions(-DBOOST_TEST_DYN_LINK)
 add_definitions(-DBOOST_THREAD_VERSION=4)
 add_definitions(-DBOOST_ASIO_DISABLE_HANDLER_TYPE_REQUIREMENTS=1)
