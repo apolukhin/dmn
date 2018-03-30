@@ -21,7 +21,7 @@ env:
 
     matrix:
         - CXXFLAGS="-fuse-ld=gold --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
-        - CXXFLAGS="-Wno-c++11-narrowing -std=c++14" CC=clang-6.0 CXX=clang++-6.0 TOOLSET=clang-6.0
+        - CXXFLAGS="-Wno-c++11-narrowing --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=clang-6.0 CXX=clang++-6.0 TOOLSET=clang-6.0
 
 ###############################################################################################################
 # From this point and below code is same for all the Boost libs
@@ -74,7 +74,7 @@ before_install:
 script:
     - cmake -DCMAKE_BUILD_TYPE=Debug -DBOOST_ROOT=$BOOST .
     - make -j4
-    - ./dmn_tests
+    - LD_LIBRARY_PATH=$BOOST/stage/lib:$LD_LIBRARY_PATH ./dmn_tests
 
 
 after_success:
@@ -83,15 +83,14 @@ after_success:
     - unzip v1.13.zip
     - LCOV="`pwd`/lcov-1.13/bin/lcov $GCOV"
 
-    - find Chapter*/* -type d -exec $LCOV --directory "{}" --base-directory ./"{}" --capture --output-file "{}"/tmp_coverage.info \;
+    - find ./* -type d -exec $LCOV --directory "{}" --base-directory ./"{}" --capture --output-file "{}"/tmp_coverage.info \;
 
-    - find Chapter*/ -name tmp_coverage.info -print0 | xargs -0 -I {} $LCOV --remove "{}" "/usr*" $IGNORE_COVERAGE -o "{}"_1
-    - mv Chapter01/01_A_program_options_base/tmp_coverage.info_1 $TRAVIS_BUILD_DIR/coverals/coverage.info
-    - find Chapter*/ -name tmp_coverage.info_1 -print0 | xargs -0 -I {} sh -c "($LCOV -a $TRAVIS_BUILD_DIR/coverals/coverage.info -a '{}' --output-file $TRAVIS_BUILD_DIR/coverals/new_coverage.info && mv -f $TRAVIS_BUILD_DIR/coverals/new_coverage.info $TRAVIS_BUILD_DIR/coverals/coverage.info)|| :"
+    - find ./ -name tmp_coverage.info -print0 | xargs -0 -I {} $LCOV --remove "{}" "/usr*" $IGNORE_COVERAGE -o "{}"_1    
+    - find ./ -name tmp_coverage.info_1 -print0 | xargs -0 -I {} sh -c "($LCOV -a $TRAVIS_BUILD_DIR/coverals/coverage.info -a '{}' --output-file $TRAVIS_BUILD_DIR/coverals/new_coverage.info && mv -f $TRAVIS_BUILD_DIR/coverals/new_coverage.info $TRAVIS_BUILD_DIR/coverals/coverage.info)|| :"
 
     # Sending data to Coveralls
     - cd $TRAVIS_BUILD_DIR
     - gem install coveralls-lcov
-    - coveralls-lcov --repo-token "cuZr7V4LxFwjPi8WWKPxad9TBVUoDv0uH" coverals/coverage.info
+    - coveralls-lcov coverals/coverage.info
     # Sending data to codecov.io
     - bash <(curl -s https://codecov.io/bash)
