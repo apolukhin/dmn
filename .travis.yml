@@ -8,8 +8,8 @@
 # See https://svn.boost.org/trac/boost/wiki/TravisCoverals for description of this file
 # and how it can be used with Boost libraries.
 
-
-sudo: false
+# ASan requires sudo
+sudo: true
 
 os:
     - linux
