@@ -120,7 +120,5 @@ BOOST_AUTO_TEST_CASE(netlink_back_and_forth_multiple_flags) {
         p.add_data(nullptr, 0, name);
     }
     netlink_back_and_forth_test_impl(std::move(p));
-
-    new int;
 }
 
