@@ -158,6 +158,7 @@ public:
 
     void on_stop_reading() noexcept final {
         acceptor_.cancel();
+        unknown_links_.cancel();
 
         std::size_t links_count = 0;
         for_each_edge([&links_count](auto& e){
@@ -171,7 +172,6 @@ public:
 
     ~node_impl_read_n() noexcept {
         acceptor_.cancel();
-        unknown_links_.cancel();
 
         std::size_t links_count = 0;
         for_each_edge([&links_count](auto& e){
