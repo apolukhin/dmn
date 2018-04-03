@@ -7,6 +7,7 @@
 #include "impl/edges/edge_in.hpp"
 #include "impl/net/tcp_read_proto.hpp"
 #include "impl/node_parts/packets_gatherer.hpp"
+#include "impl/work_counter.hpp"
 
 #include <boost/make_unique.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -23,6 +24,7 @@ class node_impl_read_n: public virtual node_base_t {
     using edge_t = edge_in_t<packet_network_t>;
     using link_t = edge_t::link_t;
 
+    work_counter_t                  pending_reads_;
     const std::size_t               edges_count_;
     const std::unique_ptr<edge_t[]> edges_;
 
@@ -73,16 +75,14 @@ class node_impl_read_n: public virtual node_base_t {
     }
 
     void on_error(link_t& link, const boost::system::error_code& e) {
-        if (!link.is_helper_id_set()) {
+        if (link.is_helper_id_set()) {
+            edges_[link.get_helper_id()].remove_link(link);
+        } else {
             // Destroying non owned link
             unknown_links_.extract(link);
-
-            // TODO: log issue
-            return;
         }
 
-        const auto links_count = edges_[link.get_helper_id()].remove_link(link);
-        if (!links_count) {
+        if (!pending_reads_.remove()) {
             no_more_readers();
             return;
         }
@@ -94,6 +94,7 @@ class node_impl_read_n: public virtual node_base_t {
         if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
             return;
         }
+        pending_reads_.add();
         BOOST_ASSERT_MSG(!error, "Error while accepting");
 
         auto link_ptr = link_t::construct(
@@ -170,7 +171,7 @@ public:
         }
     }
 
-    ~node_impl_read_n() noexcept {
+    ~node_impl_read_n() noexcept override {
         acceptor_.cancel();
 
         std::size_t links_count = 0;
@@ -179,7 +180,7 @@ public:
         });
 
         BOOST_ASSERT_MSG(links_count == 0, "Not all the links exited before shutdown");
-    };
+    }
 };
 
 }

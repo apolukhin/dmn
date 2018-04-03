@@ -97,7 +97,7 @@ public:
         acceptor_.cancel();
         const auto links_count = edge_.close_links();
         BOOST_ASSERT_MSG(links_count == 0, "Not all the links exited before shutdown");
-    };
+    }
 };
 
 }
