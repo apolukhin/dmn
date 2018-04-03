@@ -94,4 +94,4 @@ after_success:
     - gem install coveralls-lcov
     - coveralls-lcov coverals/coverage.info
     # Sending data to codecov.io
-    - bash <(curl -s https://codecov.io/bash)
+    - bash <(curl -s https://codecov.io/bash) -f '!*tests*'
