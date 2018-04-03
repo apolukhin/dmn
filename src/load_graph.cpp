@@ -1,9 +1,12 @@
 #include "load_graph.hpp"
 
 #include <boost/graph/graphviz.hpp>
-#include <boost/graph/hawick_circuits.hpp>
-#include <boost/optional.hpp>
+#include <boost/property_map/property_map.hpp>
+#include <boost/graph/depth_first_search.hpp>
+#include <boost/graph/topological_sort.hpp>
+#include <boost/graph/visitors.hpp>
 
+#include <boost/optional.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/utility/string_view.hpp>
 
@@ -14,18 +17,60 @@ namespace dmn {
 
 namespace {
 
-struct on_circut {
-    template <class T, class Graph>
-    void cycle(const T& container, const Graph& g) const {
+template <typename VertexDesc>
+struct check_for_dag_visitor : public boost::dfs_visitor<> {
+    explicit check_for_dag_visitor(std::vector<VertexDesc>& paths)
+        : paths_(paths)
+    {}
+
+    template <typename Edge, typename Graph>
+    void back_edge(const Edge& e, Graph& g) {
+        auto v_target = boost::target(e, g);
+        auto v_source = boost::source(e, g);
+
         std::string msg = "Graph has a circut: ";
-        for (const auto& v: container) {
-            msg += g[v].node_id;
+        auto it = std::find(paths_.cbegin(), paths_.cend(), v_target);
+        BOOST_ASSERT_MSG(it != paths_.cend(), "Boost.Graph has not put a discovered vertex into the path");
+
+        for (;*it != v_source; ++it) {
+            msg += g[boost::vertex(*it, g)].node_id;
             msg += " -> ";
         }
-        msg += g[container.front()].node_id;
+        msg += g[boost::vertex(v_source, g)].node_id;
+        msg += " -> ";
+        msg += g[boost::vertex(v_target, g)].node_id;
+
         throw std::runtime_error(std::move(msg));
     }
+
+    template <typename Vertex, typename Graph>
+    void discover_vertex(const Vertex& u, Graph&) {
+        paths_.push_back(u);
+    }
+
+    template <typename Vertex, typename Graph>
+    void finish_vertex(const Vertex& u, Graph&) {
+        BOOST_ASSERT_MSG(paths_.back() == u, "Boost.Graph called finish_vertex on a vertex that was not put last via discover_vertex");
+        paths_.pop_back();
+        (void)u;
+    }
+
+    std::vector<VertexDesc>& paths_;
 };
+
+
+template <typename VertexListGraph>
+inline void check_for_dag(VertexListGraph& g) {
+    using vd_t = typename boost::graph_traits<VertexListGraph>::vertex_descriptor;
+    std::vector<vd_t> paths;
+    paths.reserve(boost::num_vertices(g));
+    const boost::bgl_named_params<int, boost::buffer_param_t> params{};
+    boost::depth_first_search(
+        g,
+        params.visitor(check_for_dag_visitor<vd_t>{paths})
+    );
+}
+
 
 void validate_flow_network(const graph_t& graph) {
     using vertex_descriptor_t = boost::graph_traits<graph_t>::vertex_descriptor;
@@ -72,22 +117,33 @@ void validate_flow_network(const graph_t& graph) {
         throw std::runtime_error("Graph has no source! There must be one vertex with outgoing edges and no incomming edges.");
     }
 
-    hawick_circuits(graph, on_circut{});
+    check_for_dag(graph);
 }
 
 void validate_vertexes(const graph_t& graph) {
-    const auto all_vertices = vertices(graph);
+    const auto all_vertices = boost::vertices(graph);
     for (auto vp = all_vertices; vp.first != vp.second; ++vp.first) {
         const vertex_t& v = graph[*vp.first];
 
-        if (v.hosts.empty()) {
+        const auto edges_in = boost::in_edges(*vp.first, graph);
+        if (edges_in.second - edges_in.first > std::numeric_limits<std::uint16_t>::max()) {
             throw std::runtime_error(
-                "Each vertex must have a non empty hosts property. Example:\n"
-                "(digraph example {\n"
-                "    a [hosts = \"127.0.0.1:44001\"];\n"
-                "    b [hosts = \"127.0.0.1:44003\"];\n"
-                "    a -> b;\n"
-                "}"
+                "Each vertex must have at most "
+                + boost::lexical_cast<std::string>(std::numeric_limits<std::uint16_t>::max())
+                + " incomming edges. Vertex '" + v.node_id + "' has "
+                + boost::lexical_cast<std::string>(edges_in.second - edges_in.first)
+                + " incomming edges."
+            );
+        }
+
+        const auto edges_out = boost::out_edges(*vp.first, graph);
+        if (edges_out.second - edges_out.first > std::numeric_limits<std::uint16_t>::max()) {
+            throw std::runtime_error(
+                "Each vertex must have at most "
+                + boost::lexical_cast<std::string>(std::numeric_limits<std::uint16_t>::max())
+                + " outgoing edges. Vertex '" + v.node_id + "' has "
+                + boost::lexical_cast<std::string>(edges_out.second - edges_out.first)
+                + " outgoing edges."
             );
         }
     }
@@ -99,6 +155,17 @@ void validate_hosts(const graph_t& graph) {
 
     for (auto vp = all_vertices; vp.first != vp.second; ++vp.first) {
         const vertex_t& v = graph[*vp.first];
+
+        if (v.hosts.empty()) {
+            throw std::runtime_error(
+                "Vertex '" + v.node_id + "' and all other vertexes must have non empty 'hosts' property. Example:\n"
+                "(digraph example {\n"
+                "    a [hosts = \"127.0.0.1:44001\"];\n"
+                "    b [hosts = \"127.0.0.1:44003\"];\n"
+                "    a -> b;\n"
+                "}"
+            );
+        }
 
         for (const auto& h: v.hosts.base()) {
             if (hosts_vertex.count(h)) {

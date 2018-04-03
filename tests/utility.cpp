@@ -8,25 +8,25 @@
 BOOST_AUTO_TEST_CASE(circular_iterator_test) {
     using it_t = dmn::circular_iterator<std::vector<int>>;
 
-    std::vector<int> v;
-    v.resize(1024, 0);
-    std::for_each(it_t(v, 0, 1024), it_t{}, [](auto& v){ ++v;});
-    BOOST_TEST(v == std::vector<int>(1024, 1));
+    std::vector<int> vec;
+    vec.resize(1024, 0);
+    std::for_each(it_t(vec, 0, 1024), it_t{}, [](auto& v){ ++v;});
+    BOOST_TEST(vec == std::vector<int>(1024, 1));
 
-    std::for_each(it_t(v, 500, 1024), it_t{}, [](auto& v){ ++v;});
-    BOOST_TEST(v == std::vector<int>(1024, 2));
+    std::for_each(it_t(vec, 500, 1024), it_t{}, [](auto& v){ ++v;});
+    BOOST_TEST(vec == std::vector<int>(1024, 2));
 
-    std::for_each(it_t(v, 1024, 1024), it_t{}, [](auto& v){ ++v;});
-    BOOST_TEST(v == std::vector<int>(1024, 3));
+    std::for_each(it_t(vec, 1024, 1024), it_t{}, [](auto& v){ ++v;});
+    BOOST_TEST(vec == std::vector<int>(1024, 3));
 
-    std::for_each(it_t(v, 10024, 1024), it_t{}, [](auto& v){ ++v;});
-    BOOST_TEST(v == std::vector<int>(1024, 4));
+    std::for_each(it_t(vec, 10024, 1024), it_t{}, [](auto& v){ ++v;});
+    BOOST_TEST(vec == std::vector<int>(1024, 4));
 
-    std::for_each(it_t(v, 1023, 2), it_t{}, [](auto& v){ ++v;});
+    std::for_each(it_t(vec, 1023, 2), it_t{}, [](auto& v){ ++v;});
     std::vector<int> ethalon(1, 5);
     ethalon.resize(1024-1, 4);
     ethalon.resize(1024, 5);
-    BOOST_TEST(v == ethalon);
+    BOOST_TEST(vec == ethalon);
 }
 
 BOOST_AUTO_TEST_CASE(slab_allocator_test) {
@@ -58,9 +58,13 @@ BOOST_AUTO_TEST_CASE(slab_allocator_test) {
 
 BOOST_AUTO_TEST_CASE(lazy_array_basic_test) {
     struct non_default_constr {
+        non_default_constr(const non_default_constr&) = delete;
+        non_default_constr& operator=(const non_default_constr&) = delete;
+
         int& destructions_count;
-        non_default_constr(int, int, int& destructions_count)
-            : destructions_count(destructions_count)
+
+        non_default_constr(int, int, int& destruc_count)
+            : destructions_count(destruc_count)
         {}
         ~non_default_constr() {
             ++ destructions_count;
@@ -91,10 +95,13 @@ BOOST_AUTO_TEST_CASE(lazy_array_basic_test) {
 
 BOOST_AUTO_TEST_CASE(lazy_array_derived_test) {
     struct base {
+        base(const base&) = delete;
+        base& operator=(const base&) = delete;
+
         int& destructions_count;
 
-        base(int& destructions_count)
-            : destructions_count(destructions_count)
+        base(int& destruc_count)
+            : destructions_count(destruc_count)
         {}
 
         virtual bool is_ok() const { return false; }
@@ -105,8 +112,8 @@ BOOST_AUTO_TEST_CASE(lazy_array_derived_test) {
 
     struct derived: base {
         using base::base;
-        virtual bool is_ok() const override { return true; }
-        virtual ~derived() {
+        bool is_ok() const override { return true; }
+        ~derived() override {
             ++destructions_count;
         }
     };
@@ -115,8 +122,8 @@ BOOST_AUTO_TEST_CASE(lazy_array_derived_test) {
         using base::base;
         bool b = true;
 
-        virtual bool is_ok() const override { return b; }
-        virtual ~derived2() {
+         bool is_ok() const override { return b; }
+        ~derived2() override {
             ++destructions_count;
         }
     };

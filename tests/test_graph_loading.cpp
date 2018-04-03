@@ -1,5 +1,6 @@
 #include "load_graph.hpp"
 
+#include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
 struct exception_message {
@@ -104,6 +105,87 @@ BOOST_AUTO_TEST_CASE(graph_topology_validation) {
     )");
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss4), std::runtime_error, exception_message{"Graph has a circut: d -> e -> d"});
 
+    const std::string ss4_long0(R"(
+        digraph test
+        {
+           a -> b;
+           b -> c;
+           c -> d;
+           d -> e;
+           e -> f;
+           a -> b0;
+           b0 -> b1;
+           b1 -> b2;
+           b2 -> b3;
+           b3 -> b4;
+           b4 -> b5;
+           b5 -> b0;
+           b5 -> f;
+        }
+    )");
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss4_long0), std::runtime_error, exception_message{"Graph has a circut: b0 -> b1 -> b2 -> b3 -> b4 -> b5 -> b0"});
+
+    const std::string ss4_long1(R"(
+        digraph test
+        {
+           a -> b;
+           b -> c;
+           a -> b0;
+           b0 -> b1;
+           b1 -> b2;
+           b2 -> b3;
+           b3 -> b4;
+           b4 -> b5;
+           b5 -> b0;
+           b5 -> f;
+           c -> d;
+           d -> e;
+           e -> f;
+        }
+    )");
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss4_long1), std::runtime_error, exception_message{"Graph has a circut: b0 -> b1 -> b2 -> b3 -> b4 -> b5 -> b0"});
+
+    const std::string ss4_long2(R"(
+        digraph test
+        {
+           a -> b;
+           b -> c;
+           a -> b0;
+           b0 -> b1;
+           b4 -> b5;
+           b5 -> b0;
+           b5 -> f;
+           c -> d;
+           d -> e;
+           e -> f;
+           b1 -> b2;
+           b2 -> b3;
+           b3 -> b4;
+        }
+    )");
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss4_long2), std::runtime_error, exception_message{"Graph has a circut: b0 -> b1 -> b2 -> b3 -> b4 -> b5 -> b0"});
+
+
+    const std::string ss4_long3(R"(
+        digraph test
+        {
+           a -> b;
+           b -> c;
+           a -> b0;
+           b0 -> b1;
+           b1 -> f;
+           b4 -> b5;
+           b5 -> b0;
+           b5 -> f;
+           c -> d;
+           d -> e;
+           e -> f;
+           b1 -> b2;
+           b2 -> b3;
+           b3 -> b4;
+        }
+    )");
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss4_long3), std::runtime_error, exception_message{"Graph has a circut: b0 -> b1 -> b2 -> b3 -> b4 -> b5 -> b0"});
 
     const std::string ss5(R"(
         digraph test
@@ -143,12 +225,12 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_validation) {
         }
     )");
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
-        "Each vertex must have a non empty hosts property. Example:\n"
-        "(digraph example {\n"
-        "    a [hosts = \"127.0.0.1:44001\"];\n"
-        "    b [hosts = \"127.0.0.1:44003\"];\n"
-        "    a -> b;\n"
-        "}"
+          "Vertex 'a' and all other vertexes must have non empty 'hosts' property. Example:\n"
+          "(digraph example {\n"
+          "    a [hosts = \"127.0.0.1:44001\"];\n"
+          "    b [hosts = \"127.0.0.1:44003\"];\n"
+          "    a -> b;\n"
+          "}"
     });
 }
 
@@ -163,5 +245,51 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_hosts_validation) {
     )");
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
         "Same host:port for vertexes 'a' and 'b'"
+    });
+}
+
+BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_outgoing_edges) {
+    std::string ss;
+    ss.reserve(20 * std::numeric_limits<std::uint16_t>::max());
+    ss += "digraph test {";
+
+    for (std::size_t i = 0; i <= std::numeric_limits<std::uint16_t>::max(); ++i) {
+        const auto id = boost::lexical_cast<std::array<char, 30>>(i);
+        ss += "a->b";
+        ss += id.data();
+        ss += ";b";
+        ss += id.data();
+        ss += "->c;";
+    }
+    ss += "}";
+
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
+        "Each vertex must have at most 65535 outgoing edges. Vertex 'a' has 65536 outgoing edges."
+    });
+}
+
+BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_incomming_edges) {
+    std::string ss;
+    ss.reserve(20 * std::numeric_limits<std::uint16_t>::max());
+    ss += "digraph test { c;";
+
+    for (std::size_t i = 0; i < std::numeric_limits<std::uint16_t>::max() - 1; ++i) {
+        const auto id = boost::lexical_cast<std::array<char, 30>>(i);
+        ss += "a->b";
+        ss += id.data();
+        ss += ";b";
+        ss += id.data();
+        ss += "->c;";
+    }
+    ss += "a->z;";
+    ss += "z->x0;x0->c;";
+    ss += "z->x1;x1->c;";
+    ss += "z->x2;x2->c;";
+    ss += "z->x3;x3->c;";
+    ss += "z->x4;x4->c;";
+    ss += "}";
+
+    BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
+        "Each vertex must have at most 65535 incomming edges. Vertex 'c' has 65539 incomming edges."
     });
 }

@@ -32,8 +32,9 @@ public:
 
 
     std::uint16_t edge_id_for_receiver(std::uint16_t out_edge_index = 0);
-    std::size_t count_in_edges() const noexcept;
-    std::size_t count_out_edges() const noexcept;
+    std::uint16_t count_in_edges() const noexcept;
+    std::uint16_t count_in_edges_for_receiver(std::uint16_t out_edge_index) const noexcept;
+    std::uint16_t count_out_edges() const noexcept;
 
     virtual void on_packet_accept(packet_t packet) = 0;
     packet_t call_callback(packet_t packet) noexcept;
