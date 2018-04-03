@@ -1,4 +1,5 @@
 #include "impl/circular_iterator.hpp"
+#include "impl/lazy_array.hpp"
 #include "impl/net/slab_allocator.hpp"
 
 #include <vector>
@@ -53,4 +54,85 @@ BOOST_AUTO_TEST_CASE(slab_allocator_test) {
         a.deallocate(p0);
         a.deallocate(p1);
     }
+}
+
+BOOST_AUTO_TEST_CASE(lazy_array_basic_test) {
+    struct non_default_constr {
+        int& destructions_count;
+        non_default_constr(int, int, int& destructions_count)
+            : destructions_count(destructions_count)
+        {}
+        ~non_default_constr() {
+            ++ destructions_count;
+        }
+    };
+
+    int destructions_count = 0;
+    {
+
+        dmn::lazy_array<non_default_constr> la;
+        la.init(3);
+        la.inplace_construct(0, 0, 0, destructions_count);
+        la.inplace_construct(1, 0, 0, destructions_count);
+        la.inplace_construct(2, 0, 0, destructions_count);
+
+        for (auto& v: la) {
+            BOOST_TEST(v.destructions_count == 0);
+        }
+
+        const auto& cla = la;
+        for (auto& v: cla) {
+            BOOST_TEST(v.destructions_count == 0);
+        }
+
+    }
+    BOOST_TEST(destructions_count == 3);
+}
+
+BOOST_AUTO_TEST_CASE(lazy_array_derived_test) {
+    struct base {
+        int& destructions_count;
+
+        base(int& destructions_count)
+            : destructions_count(destructions_count)
+        {}
+
+        virtual bool is_ok() const { return false; }
+        virtual ~base() {
+            ++destructions_count;
+        }
+    };
+
+    struct derived: base {
+        using base::base;
+        virtual bool is_ok() const override { return true; }
+        virtual ~derived() {
+            ++destructions_count;
+        }
+    };
+
+    struct derived2: base {
+        using base::base;
+        bool b = true;
+
+        virtual bool is_ok() const override { return b; }
+        virtual ~derived2() {
+            ++destructions_count;
+        }
+    };
+
+    int destructions_count = 0;
+    {
+        dmn::lazy_array<base, sizeof(derived2)> la;
+        la.init(4);
+        la.inplace_construct_derived<derived>(0, destructions_count);
+        la.inplace_construct_derived<derived2>(1, destructions_count);
+        la.inplace_construct_derived<derived>(2, destructions_count);
+        la.inplace_construct_derived<derived2>(3, destructions_count);
+
+        for (auto& v: la) {
+            BOOST_TEST(v.is_ok());
+        }
+    }
+    BOOST_TEST(destructions_count == 8);
 }

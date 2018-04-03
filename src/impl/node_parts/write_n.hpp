@@ -114,11 +114,10 @@ class node_impl_write_n: public virtual node_base_t {
     }
 
     void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
-        auto& link = edge_t::link_from_guard(guard);
-        auto p = std::move(link.packet);
         pending_writes_.add();
-        auto& edge = edges_[link.helper_id()];
-        edge.push_immediate(std::move(p));
+
+        const auto edge_id = edge_t::link_from_guard(guard).helper_id();
+        edges_[edge_id].reschedule_packet_from_link(guard);
 
         reconnect_if_running(e, std::move(guard));
     }
@@ -199,7 +198,7 @@ public:
             auto header_cpy = header;
             header_cpy.edge_id = edge.edge_id_for_receiver(); // TODO: big/little endian
 
-            edge.push({header_cpy, body});
+            edge.push(header.wave_id, {header_cpy, body});
         }
     }
 

@@ -6,6 +6,7 @@
 #include "impl/net/netlink.hpp"
 #include "impl/net/packet_network.hpp"
 #include "impl/net/tcp_write_proto.hpp"
+#include "impl/packet.hpp"
 
 namespace dmn {
 
@@ -103,17 +104,15 @@ public:
     }
 
     virtual void try_steal_work(tcp_write_proto_t::guard_t guard) = 0;
-    virtual void push_immediate(Packet p) = 0;
-    virtual void push(Packet p) = 0;
-    virtual ~edge_out_t() {
-        // TODO: assert that links are closed and
-    }
+    virtual void reschedule_packet_from_link(const tcp_write_proto_t::guard_t& guard) = 0;
+    virtual void push(wave_id_t wave, Packet p) = 0;
+    virtual ~edge_out_t() = default;
 };
 
 
 
 template <class Packet>
-struct edge_out_round_robin_t: public edge_out_t<Packet> {
+struct edge_out_round_robin_t final: public edge_out_t<Packet> {
     using base_t = edge_out_t<Packet>;
 
     using queue_t = typename base_t::queue_t;
@@ -180,13 +179,16 @@ public:
         link.async_send(std::move(guard), buf);
     }
 
-    void push_immediate(Packet p) final {
+    void reschedule_packet_from_link(const tcp_write_proto_t::guard_t& guard) final {
+        auto& link = base_t::link_from_guard(guard);
+        auto p = std::move(link.packet);
+
         BOOST_ASSERT_MSG(!base_t::empty_packet(p), "Scheduling an empty packet without headers for push_immediate sending. This must not be produced by accepting vertexes");
         data_to_send_.silent_push_front(std::move(p));
         try_send();
     }
 
-    void push(Packet p) final {
+    void push(wave_id_t /*wave*/, Packet p) final {
         BOOST_ASSERT_MSG(!base_t::empty_packet(p), "Scheduling an empy packet without headers for sending. This must not be produced by accepting vertexes");
         data_to_send_.silent_push(std::move(p));
         try_send(); // Rechecking for case when some write operation was finished before we pushed into the data_to_send_

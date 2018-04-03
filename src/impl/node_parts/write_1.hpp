@@ -38,11 +38,8 @@ class node_impl_write_1: public virtual node_base_t {
     }
 
     void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
-        auto& link = edge_t::link_from_guard(guard);
-        auto p = std::move(link.packet);
         pending_writes_.add();
-        edge_.push_immediate(std::move(p));
-
+        edge_.reschedule_packet_from_link(guard);
         reconnect_if_running(e, std::move(guard));
     }
 
@@ -98,9 +95,10 @@ public:
         pending_writes_.add();
 
         packet_t data = call_callback(std::move(packet));
+        const auto wave_id = data.header().wave_id;
         data.header().edge_id = edge_.edge_id_for_receiver();
 
-        edge_.push(packet_network_t{std::move(data)});
+        edge_.push(wave_id, packet_network_t{std::move(data)});
     }
 
     ~node_impl_write_1() noexcept override {
