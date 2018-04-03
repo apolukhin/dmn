@@ -87,7 +87,7 @@ public:
 class node_impl_write_n: public virtual node_base_t {
     work_counter_t                  pending_writes_;
 
-    using edge_t = edge_out_t<std::pair<packet_header_t, boost::asio::const_buffer>>;
+    using edge_t = edge_out_round_robin_t<std::pair<packet_header_t, boost::asio::const_buffer>>;
     using link_t = edge_t::link_t;
 
     const std::size_t               edges_count_;

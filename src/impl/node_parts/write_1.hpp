@@ -15,7 +15,7 @@ namespace dmn {
 class node_impl_write_1: public virtual node_base_t {
     work_counter_t                  pending_writes_;
 
-    using edge_t = edge_out_t<packet_network_t>;
+    using edge_t = edge_out_round_robin_t<packet_network_t>;
     using link_t = edge_t::link_t;
     edge_t                          edge_;
 

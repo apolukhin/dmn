@@ -16,11 +16,10 @@ struct edge_out_t {
     using queue_t = silent_mt_queue<Packet>;
 
 private:
-    std::atomic_uintmax_t   last_used_link{0};
-    netlinks_t              netlinks_{}; // `const` after set_links()
-    queue_t                 data_to_send_{};
     const std::uint16_t     edge_id_for_receiver_;
 
+protected:
+    netlinks_t              netlinks_{}; // `const` after set_links()
 
     template <class Link>
     static boost::asio::const_buffers_1 get_buf(netlink_t<packet_network_t, Link>& link, packet_network_t v) noexcept {
@@ -63,43 +62,6 @@ private:
         return false;
     }
 
-private:
-    template <class Container>
-    struct round_robin_balancer_t {
-        Container&             c_;
-        const std::size_t      start_index_;
-
-        circular_iterator<Container> begin() const noexcept {
-            return circular_iterator<Container>(c_, start_index_, c_.size());
-        }
-
-        circular_iterator<Container> end() const noexcept {
-            return circular_iterator<Container>();
-        }
-    };
-
-    round_robin_balancer_t<netlinks_t> links_balancer() noexcept {
-        return round_robin_balancer_t<netlinks_t>{netlinks_, last_used_link.fetch_add(1, std::memory_order_relaxed)};
-    }
-
-    void try_send() {
-        for (auto& v: links_balancer()) {
-            tcp_write_proto_t::guard_t lock = v.try_lock();
-            if (!lock) {
-                continue;
-            }
-
-            auto p = data_to_send_.try_pop();
-            if (!p) {
-                return;
-            }
-
-            const auto buf = get_buf(v, std::move(*p));
-            v.async_send(std::move(lock), buf);
-            break;
-        }
-    }
-
 public:
     explicit edge_out_t(std::uint16_t edge_id_for_receiver)
         : edge_id_for_receiver_(edge_id_for_receiver)
@@ -129,12 +91,8 @@ public:
         }
     }
 
-    void assert_no_more_data() noexcept {
-        BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
-    }
-
     void close_links() noexcept {
-        for (auto& v: links_balancer()) {
+        for (auto& v: netlinks_) {
             tcp_write_proto_t::guard_t lock = v.try_lock();
             if (lock) {
                 v.close(std::move(lock));
@@ -144,29 +102,95 @@ public:
         }
     }
 
-    void try_steal_work(tcp_write_proto_t::guard_t&& guard) {
+    virtual void try_steal_work(tcp_write_proto_t::guard_t guard) = 0;
+    virtual void push_immediate(Packet p) = 0;
+    virtual void push(Packet p) = 0;
+    virtual ~edge_out_t() {
+        // TODO: assert that links are closed and
+    }
+};
+
+
+
+template <class Packet>
+struct edge_out_round_robin_t: public edge_out_t<Packet> {
+    using base_t = edge_out_t<Packet>;
+
+    using queue_t = typename base_t::queue_t;
+    using link_t = typename base_t::link_t;
+    using netlinks_t = typename base_t::netlinks_t;
+
+private:
+    std::atomic_uintmax_t   last_used_link{0};
+    queue_t                 data_to_send_{};
+
+    template <class Container>
+    struct round_robin_balancer_t {
+        Container&             c_;
+        const std::size_t      start_index_;
+
+        circular_iterator<Container> begin() const noexcept {
+            return circular_iterator<Container>(c_, start_index_, c_.size());
+        }
+
+        circular_iterator<Container> end() const noexcept {
+            return circular_iterator<Container>();
+        }
+    };
+
+    round_robin_balancer_t<netlinks_t> links_balancer() noexcept {
+        return {base_t::netlinks_, last_used_link.fetch_add(1, std::memory_order_relaxed)};
+    }
+
+    void try_send() {
+        for (auto& v: links_balancer()) {
+            tcp_write_proto_t::guard_t lock = v.try_lock();
+            if (!lock) {
+                continue;
+            }
+
+            auto p = data_to_send_.try_pop();
+            if (!p) {
+                return;
+            }
+
+            const auto buf = base_t::get_buf(v, std::move(*p));
+            v.async_send(std::move(lock), buf);
+            break;
+        }
+    }
+
+public:
+    explicit edge_out_round_robin_t(std::uint16_t edge_id_for_receiver)
+        : base_t(edge_id_for_receiver)
+    {}
+
+    void assert_no_more_data() noexcept {
+        BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
+    }
+
+    void try_steal_work(tcp_write_proto_t::guard_t guard) final {
         auto v = data_to_send_.try_pop();
         if (!v) {
             return;
         }
 
-        auto& link = link_from_guard(guard);
-        const auto buf = get_buf(link, std::move(*v));
+        auto& link = base_t::link_from_guard(guard);
+        const auto buf = base_t::get_buf(link, std::move(*v));
         link.async_send(std::move(guard), buf);
     }
 
-    void push_immediate(Packet p) {
-        BOOST_ASSERT_MSG(!empty_packet(p), "Scheduling an empty packet without headers for push_immediate sending. This must not be produced by accepting vertexes");
+    void push_immediate(Packet p) final {
+        BOOST_ASSERT_MSG(!base_t::empty_packet(p), "Scheduling an empty packet without headers for push_immediate sending. This must not be produced by accepting vertexes");
         data_to_send_.silent_push_front(std::move(p));
         try_send();
     }
 
-    void push(Packet p) {
-        BOOST_ASSERT_MSG(!empty_packet(p), "Scheduling an empy packet without headers for sending. This must not be produced by accepting vertexes");
+    void push(Packet p) final {
+        BOOST_ASSERT_MSG(!base_t::empty_packet(p), "Scheduling an empy packet without headers for sending. This must not be produced by accepting vertexes");
         data_to_send_.silent_push(std::move(p));
         try_send(); // Rechecking for case when some write operation was finished before we pushed into the data_to_send_
     }
 };
-
 
 }
