@@ -33,7 +33,7 @@ class nodes_tester_t {
     int threads_count_ = 1;
     std::vector<std::thread> threads_;
 
-    void poll_impl();
+    void run_impl();
 
     int max_seq_ = 10;
 
