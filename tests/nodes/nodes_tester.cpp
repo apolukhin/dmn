@@ -114,7 +114,6 @@ void nodes_tester_t::test() {
 
 
     poll_impl();
-
     for (auto& node : nodes) {
         node->shutdown_gracefully();
         poll_impl();

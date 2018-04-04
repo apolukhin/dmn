@@ -24,12 +24,12 @@ class node_impl_read_0: public virtual node_base_t {
             packet_t p{};
             p.place_header();
             p.header().wave_id = new_wave();
-            on_packet_accept(std::move(p));
+
             if (state() == node_state::RUN) {
                 start();
-            } else {
-                no_more_readers(); // TODO: mutithreaded run
             }
+
+            on_packet_accept(std::move(p));
         });
     }
 public:

@@ -85,7 +85,6 @@ public:
 };
 
 class node_impl_write_n: public virtual node_base_t {
-    work_counter_t                  pending_writes_;
 
     using edge_t = edge_out_round_robin_t<std::pair<packet_header_t, boost::asio::const_buffer>>;
     using link_t = edge_t::link_t;
@@ -103,10 +102,8 @@ class node_impl_write_n: public virtual node_base_t {
         // TODO: async log issue
 
         if (state() != node_state::RUN) {
-            // Drop the write task on the floor.
-            pending_writes_.remove();
+            // Do not reconnect
             link.close(std::move(guard));
-            on_stop_writing();
             return;
         }
 
@@ -114,17 +111,13 @@ class node_impl_write_n: public virtual node_base_t {
     }
 
     void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
-        pending_writes_.add();
-
         const auto edge_id = edge_t::link_from_guard(guard).helper_id();
         edges_[edge_id].reschedule_packet_from_link(guard);
-
         reconnect_if_running(e, std::move(guard));
     }
 
     void on_operation_finished(tcp_write_proto_t::guard_t guard) {
         started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
-        pending_writes_.remove();
 
         auto& link = edge_t::link_from_guard(guard);
         packets_.send_success(link.packet.second);
@@ -148,7 +141,6 @@ public:
             const vertex_t& out_vertex = config[boost::target(*edges_it, config)];
 
             const auto hosts_count = out_vertex.hosts.size();
-            pending_writes_.add(hosts_count);
             edges_.inplace_construct(i, edge_id_for_receiver(i));
             edges_[i].preinit_links(hosts_count);
             for (std::size_t j = 0; j < hosts_count; ++j) {
@@ -168,24 +160,7 @@ public:
         }
     }
 
-    void on_stop_writing() noexcept final {
-        if (!pending_writes_.get()) {
-            no_more_writers();
-        }
-    }
-
-    void on_stoped_writing() noexcept  final {
-        BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
-        BOOST_ASSERT_MSG(!packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");
-
-        for (auto& edge: edges_) {
-            edge.assert_no_more_data();
-            edge.close_links();
-        }
-    }
-
     void on_packet_accept(packet_t packet) final {
-        pending_writes_.add(edges_count_);
 
         BOOST_ASSERT_MSG(!packet.empty(), "Attempt to send an empty packet, even without a header");
 
@@ -212,8 +187,8 @@ public:
 
             edge.close_links();
         }
-
-        BOOST_ASSERT_MSG(!soft_shutdown || !pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
+//BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
+//        BOOST_ASSERT_MSG(!soft_shutdown || !pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
         BOOST_ASSERT_MSG(!soft_shutdown || !packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");
     }
 };

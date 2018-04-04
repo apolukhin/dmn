@@ -120,8 +120,6 @@ struct node_in_x_out_x final: Read, Write {
 
     using Read::on_stop_reading;
     using Write::on_packet_accept;
-    using Write::on_stop_reading;
-    using Write::on_stoped_writing;
 
     ~node_in_x_out_x() noexcept = default;
 };

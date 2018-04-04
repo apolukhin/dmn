@@ -13,8 +13,6 @@
 namespace dmn {
 
 class node_impl_write_1: public virtual node_base_t {
-    work_counter_t                  pending_writes_;
-
     using edge_t = edge_out_round_robin_t<packet_network_t>;
     using link_t = edge_t::link_t;
     edge_t                          edge_;
@@ -28,9 +26,7 @@ class node_impl_write_1: public virtual node_base_t {
 
         if (state() != node_state::RUN) {
             // Drop the write task on the floor.
-            pending_writes_.remove();
             link.close(std::move(guard));
-            on_stop_writing();
             return;
         }
 
@@ -38,14 +34,12 @@ class node_impl_write_1: public virtual node_base_t {
     }
 
     void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
-        pending_writes_.add();
         edge_.reschedule_packet_from_link(guard);
         reconnect_if_running(e, std::move(guard));
     }
 
     void on_operation_finished(tcp_write_proto_t::guard_t guard) {
         started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
-        pending_writes_.remove();
         edge_.try_steal_work(std::move(guard));
     }
 
@@ -62,7 +56,6 @@ public:
         const vertex_t& out_vertex = config[target(*edges_out.first, config)];
 
         const auto hosts_count = out_vertex.hosts.size();
-        pending_writes_.add(hosts_count);
         edge_.preinit_links(hosts_count);
         for (std::size_t i = 0; i < hosts_count; ++ i) {
             edge_.inplace_construct_link(
@@ -78,22 +71,7 @@ public:
         edge_.connect_links();
     }
 
-    void on_stop_writing() noexcept final {
-        if (!pending_writes_.get()) {
-            no_more_writers();
-        }
-    }
-
-    void on_stoped_writing() noexcept final {
-        BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
-
-        edge_.assert_no_more_data();
-        edge_.close_links();
-    }
-
     void on_packet_accept(packet_t packet) final {
-        pending_writes_.add();
-
         packet_t data = call_callback(std::move(packet));
         const auto wave_id = data.header().wave_id;
         data.header().edge_id = edge_.edge_id_for_receiver();
@@ -105,7 +83,7 @@ public:
         const bool soft_shutdown = started_at_least_1_link_.load();
         if (soft_shutdown) {
             edge_.assert_no_more_data();
-            BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
+           // BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
         }
 
         edge_.close_links();

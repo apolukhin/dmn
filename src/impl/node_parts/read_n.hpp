@@ -24,7 +24,6 @@ class node_impl_read_n: public virtual node_base_t {
     using edge_t = edge_in_t<packet_network_t>;
     using link_t = edge_t::link_t;
 
-    work_counter_t                  pending_reads_;
     const std::size_t               edges_count_;
     const std::unique_ptr<edge_t[]> edges_;
 
@@ -82,11 +81,6 @@ class node_impl_read_n: public virtual node_base_t {
             unknown_links_.extract(link);
         }
 
-        if (!pending_reads_.remove()) {
-            no_more_readers();
-            return;
-        }
-
         // TODO: log issue
     }
 
@@ -94,7 +88,6 @@ class node_impl_read_n: public virtual node_base_t {
         if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
             return;
         }
-        pending_reads_.add();
         BOOST_ASSERT_MSG(!error, "Error while accepting");
 
         auto link_ptr = link_t::construct(
@@ -102,6 +95,7 @@ class node_impl_read_n: public virtual node_base_t {
             [this](auto& proto, const auto& e) { on_error(link_t::to_link(proto), e); },
             [this](auto& proto) { on_operation_finished(link_t::to_link(proto)); }
         );
+
         start_accept();
 
         auto* link = link_ptr.get();    // Releasing link ownership to reclaim it in `on_operation_finished` or delete it in `on_error`
@@ -140,20 +134,23 @@ class node_impl_read_n: public virtual node_base_t {
 
 public:
     node_impl_read_n()
-        : acceptor_(
-            ios(),
-            boost::asio::ip::tcp::endpoint(
-                boost::asio::ip::address::from_string(
-                    config[this_node_descriptor].hosts[host_id_].first.c_str()
-                ),
-                config[this_node_descriptor].hosts[host_id_].second
-            )
-        )
+        : acceptor_(ios())
         , new_socket_(ios())
         , edges_count_(count_in_edges())
         , edges_(boost::make_unique<edge_t[]>(edges_count_))
         , packs_(edges_count_)
     {
+        const auto endpoint = boost::asio::ip::tcp::endpoint(
+            boost::asio::ip::address::from_string(
+                config[this_node_descriptor].hosts[host_id_].first.c_str()
+            ),
+            config[this_node_descriptor].hosts[host_id_].second
+        );
+        acceptor_.open(endpoint.protocol());
+        acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        acceptor_.bind(endpoint);
+        acceptor_.listen();
+
         start_accept();
     }
 
@@ -161,18 +158,15 @@ public:
         acceptor_.cancel();
         unknown_links_.cancel();
 
-        std::size_t links_count = 0;
-        for_each_edge([&links_count](auto& e){
-            links_count += e.close_links();
+        for_each_edge([](auto& e){
+            e.close_links();
         });
-
-        if (!links_count) {
-            no_more_readers();
-        }
     }
 
     ~node_impl_read_n() noexcept override {
-        acceptor_.cancel();
+        boost::system::error_code ignore;
+        acceptor_.close(ignore);
+        unknown_links_.cancel();
 
         std::size_t links_count = 0;
         for_each_edge([&links_count](auto& e){

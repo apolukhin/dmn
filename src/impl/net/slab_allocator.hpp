@@ -48,7 +48,7 @@ public:
 #if DMN_DEBUG
     ~slab_allocator_basic_t() {
         for (auto v: in_use_) {
-            BOOST_ASSERT_MSG(!v, "Slab allocator is destroyed before all the resorces were freed");
+            BOOST_ASSERT_MSG(!v, "Slab allocator is destroyed before all the resources were freed");
         }
     }
 #endif

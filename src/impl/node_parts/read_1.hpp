@@ -24,12 +24,7 @@ class node_impl_read_1: public virtual node_base_t {
     edge_t edge_;
 
     void on_error(link_t& link, const boost::system::error_code& e) {
-        const auto links_count = edge_.remove_link(link);
-        if (!links_count) {
-            no_more_readers();
-            return;
-        }
-
+        edge_.remove_link(link);
         // TODO: log issue
     }
 
@@ -57,8 +52,8 @@ class node_impl_read_1: public virtual node_base_t {
             return;
         }
         auto p = std::move(link.packet);
-        link.async_read(link.packet.header_mutable_buffer());
 
+        link.async_read(link.packet.header_mutable_buffer());
         on_packet_accept(std::move(p).to_native());
     }
 
@@ -70,31 +65,32 @@ class node_impl_read_1: public virtual node_base_t {
 
 public:
     node_impl_read_1()
-        : acceptor_(
-            ios(),
-            boost::asio::ip::tcp::endpoint(
-                boost::asio::ip::address::from_string(
-                    config[this_node_descriptor].hosts[host_id_].first.c_str()
-                ),
-                config[this_node_descriptor].hosts[host_id_].second
-            )
-        )
+        : acceptor_(ios())
         , new_socket_(ios())
     {
+        const auto endpoint = boost::asio::ip::tcp::endpoint(
+            boost::asio::ip::address::from_string(
+                config[this_node_descriptor].hosts[host_id_].first.c_str()
+            ),
+            config[this_node_descriptor].hosts[host_id_].second
+        );
+        acceptor_.open(endpoint.protocol());
+        acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        acceptor_.bind(endpoint);
+        acceptor_.listen();
+
         start_accept();
     }
 
-    void on_stop_reading() noexcept override final {
+    void on_stop_reading() noexcept final {
         acceptor_.cancel();
-
-        const auto links_count = edge_.close_links();
-        if (!links_count) {
-            no_more_readers();
-        }
+        edge_.close_links();
     }
 
-    ~node_impl_read_1() noexcept {
-        acceptor_.cancel();
+    ~node_impl_read_1() noexcept override {
+        boost::system::error_code ignore;
+        acceptor_.close(ignore);
+
         const auto links_count = edge_.close_links();
         BOOST_ASSERT_MSG(links_count == 0, "Not all the links exited before shutdown");
     }
