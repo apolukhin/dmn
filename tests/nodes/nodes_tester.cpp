@@ -1,9 +1,51 @@
 #include "nodes_tester.hpp"
 
 #include <boost/asio/io_service.hpp>
+#include <boost/lexical_cast.hpp>
 #include <thread>
 
 namespace tests {
+
+std::map<int, unsigned> nodes_tester_t::seq_ethalon() const {
+    std::map<int, unsigned> res;
+    for (int i = 0; i <= max_seq_; ++i) {
+        res[i] = 1;
+    }
+    return res;
+}
+
+void nodes_tester_t::generate_sequence(dmn::stream_t& s) const {
+    const unsigned seq = sequence_counter_.fetch_add(1);
+
+    if (seq <= max_seq_) {
+        auto data = boost::lexical_cast<std::string>(seq);
+        s.add(data.data(), data.size(), "seq");
+    }
+
+    if (seq >= max_seq_) {
+        s.stop();
+    }
+}
+
+void nodes_tester_t::remember_sequence(dmn::stream_t& s) const {
+    for (const char* data_type: {"seq", "seq0", "seq1", "seq2", "seq3", "seq4", "seq5", "seq6", "seq7", "seq8", "seq9", "seq10"}) {
+        const auto data = s.get_data(data_type);
+        if (data.second == 0) {
+            continue;
+        }
+        unsigned seq = 0;
+        const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
+        BOOST_CHECK(res);
+        std::lock_guard<std::mutex> l(seq_mutex_);
+        ++sequences_[seq];
+    }
+}
+
+void nodes_tester_t::resend_sequence(dmn::stream_t& s) const {
+    const auto data = s.get_data("seq");
+    s.add(data.first, data.second, "seq");
+}
+
 
 void nodes_tester_t::poll_impl() {
     constexpr auto ios_poll = []() {
@@ -48,7 +90,18 @@ nodes_tester_t::nodes_tester_t(const std::string& links, std::initializer_list<n
             BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
-            nodes_.back()->callback_ = p.callback;
+            switch (p.act) {
+            case actions::generate:
+                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(s); };
+                break;
+            case actions::remember:
+                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(s); };
+                break;
+            case actions::resend:
+                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(s); };
+                break;
+            }
+
         }
     }
 }
@@ -64,6 +117,9 @@ void nodes_tester_t::poll() {
         poll_impl();
     }
     nodes_.clear();
+
+
+    BOOST_TEST(sequences_ == seq_ethalon());
 }
 
 }

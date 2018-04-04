@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <atomic>
+#include <functional>
 #include <boost/dll/shared_library.hpp>
 
 namespace dmn {
@@ -24,8 +25,8 @@ public:
 
     const boost::dll::shared_library lib;
 
-    using callback_t = void(*)(stream_t&);
-    callback_t callback_ = nullptr;
+    using callback_t = std::function<void(stream_t&)>;
+    callback_t callback_{};
 
     // Functions:
     node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_id);
