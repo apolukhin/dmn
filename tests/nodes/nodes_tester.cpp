@@ -53,18 +53,18 @@ void nodes_tester_t::resend_sequence(void* s_void) const {
 }
 
 
-void nodes_tester_t::poll_impl() {
-    constexpr auto ios_poll = []() {
+void nodes_tester_t::run_impl() {
+    constexpr auto ios_run = []() {
         dmn::node_base_t::ios().reset();
-        dmn::node_base_t::ios().poll();
+        dmn::node_base_t::ios().run();
     };
 
     threads_.reserve(threads_count_);
 
     for (int i = 1; i < threads_count_; ++i) {
-        threads_.emplace_back(ios_poll);
+        threads_.emplace_back(ios_run);
     }
-    ios_poll();
+    ios_run();
     for (auto& t: threads_) {
         t.join();
     }
@@ -113,13 +113,13 @@ void nodes_tester_t::test() {
     }
 
 
-    poll_impl();
+    run_impl();
     for (auto& node : nodes) {
         node->shutdown_gracefully();
-        poll_impl();
+        run_impl();
 
         node.reset();
-        poll_impl();
+        run_impl();
     }
     nodes.clear();
 
