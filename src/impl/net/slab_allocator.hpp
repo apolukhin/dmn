@@ -12,23 +12,27 @@ namespace dmn {
 // It contains blocks of memory which may be returned for allocation
 // requests. If the memory blocks are in use when an allocation request is made, the
 // allocator delegates allocation to the global heap.
-class slab_allocator_t {
-    DMN_PINNED(slab_allocator_t);
+template <std::size_t SlabSize, std::size_t SlabsCount>
+class slab_allocator_basic_t {
+    DMN_PINNED(slab_allocator_basic_t);
 
 public:
-    inline slab_allocator_t() noexcept {
-        std::fill(in_use_, in_use_ + storages_count_, static_cast<in_use_t>(0));
-    }
+    enum slab_size_enum: std::size_t { slab_size = SlabSize };
+    enum slabs_count_enum: std::size_t { slabs_count = SlabsCount};
 
+    slab_allocator_basic_t() noexcept = default;
 
     void* allocate(std::size_t size) {
-        const std::size_t blocks_required = (size / (sizeof(storage_t) - 1)) + 1;
+        if (BOOST_UNLIKELY(!size)) {
+            return nullptr;
+        }
 
+        const std::size_t blocks_required = (size - 1) / sizeof(storage_t) + 1;
         return blocks_required == 1 ? allocate_single(size) : allocate_multiple(blocks_required, size);
     }
 
     void deallocate(void* pointer) noexcept {
-        for (std::size_t i = 0; i < storages_count_; ++i) {
+        for (std::size_t i = 0; i < SlabsCount; ++i) {
             if (storages_ + i == pointer) {
                 const in_use_t to_free = in_use_[i];
                 std::fill(in_use_ + i, in_use_ + i + to_free, static_cast<in_use_t>(0));
@@ -36,14 +40,22 @@ public:
             }
         }
 
-        BOOST_ASSERT_MSG(false, "Slab allocator failed to find slab in a list of known slabs");
+        BOOST_ASSERT_MSG(!pointer, "Slab allocator failed to find slab in a list of known slabs");
         ::operator delete(pointer);
     }
+
+#if DMN_DEBUG
+    ~slab_allocator_basic_t() {
+        for (auto v: in_use_) {
+            BOOST_ASSERT_MSG(!v, "Slab allocator is destroyed before all the resorces were freed");
+        }
+    }
+#endif
 
 private:
     void* allocate_multiple(const std::size_t blocks_required, std::size_t size) {
         // Complexity in worst case: O(storages_count_)
-        for (std::size_t i = 0; i <= storages_count_ - blocks_required; ++i) {
+        for (std::size_t i = 0; i <= SlabsCount - blocks_required; ++i) {
             if (!!in_use_[i]) {
                 continue;
             }
@@ -67,34 +79,34 @@ private:
             return storages_ + i;
         }
 
-        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empy slabs");
+        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empty slabs");
         return ::operator new(size);
     }
 
     void* allocate_single(std::size_t size) {
-        for (std::size_t i = 0; i < storages_count_; ++i) {
+        for (std::size_t i = 0; i < SlabsCount; ++i) {
             if (!in_use_[i]) {
                 in_use_[i] = static_cast<in_use_t>(1u);
                 return storages_ + i;
             }
         }
 
-        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empy slabs");
+        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empty slabs");
         return ::operator new(size);
     }
 
-    static constexpr std::size_t storages_min_size_ = 256u;
-    static constexpr std::size_t storages_count_ = 4u;
-
-    // Storage space used for handler-based custom memory allocation.
-    using storage_t = std::aligned_storage_t<storages_min_size_>;
-    storage_t storages_[storages_count_];
-
     // Whether the handler-based custom allocation storage has been used.
     using in_use_t = unsigned char;
-    static_assert(storages_count_ < 255 - 1, "`in_use_t` can not hold storages_count_");
-    in_use_t in_use_[storages_count_];
+    static_assert(SlabsCount < 255 - 1, "`in_use_t` can not hold SlabsCount");
+
+    using storage_t = std::aligned_storage_t<SlabSize>;
+
+    in_use_t    in_use_[SlabsCount] = {}; // zero initialize
+    storage_t   storages_[SlabsCount];
+
 };
+
+using slab_allocator_t = slab_allocator_basic_t<64u, 4u>;
 
 } // namespace dmn
 

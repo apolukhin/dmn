@@ -3,6 +3,7 @@
 #include "impl/net/slab_allocator.hpp"
 
 #include <vector>
+#include <random>
 #include <boost/test/unit_test.hpp>
 
 BOOST_AUTO_TEST_CASE(circular_iterator_test) {
@@ -31,6 +32,10 @@ BOOST_AUTO_TEST_CASE(circular_iterator_test) {
 
 BOOST_AUTO_TEST_CASE(slab_allocator_test) {
     dmn::slab_allocator_t a;
+
+    // asio's memory usage on Linux is about 200 bytes
+    BOOST_TEST(a.slabs_count * a.slab_size >= 200);
+
     for (unsigned i = 0; i < 10; ++i) {
         auto* p = a.allocate(200);
         BOOST_TEST(p);
@@ -38,21 +43,130 @@ BOOST_AUTO_TEST_CASE(slab_allocator_test) {
     }
 
     for (unsigned i = 0; i < 10; ++i) {
-        auto* p0 = a.allocate(200);
-        auto* p1 = a.allocate(200);
+        auto* p0 = a.allocate(173);
+        auto* p1 = a.allocate(10);
         BOOST_TEST(p0);
         BOOST_TEST(p1);
         a.deallocate(p1);
         a.deallocate(p0);
     }
 
-    for (unsigned i = 0; i < 10; ++i) {
-        auto* p0 = a.allocate(i * 10);
-        auto* p1 = a.allocate(i * 5);
+    {
+        auto* p1 = a.allocate(10);
+        BOOST_TEST(p1);
+        for (unsigned i = 0; i < 10; ++i) {
+            auto* p0 = a.allocate(173);
+            BOOST_TEST(p0);
+            a.deallocate(p0);
+        }
+        a.deallocate(p1);
+    }
+
+    {
+        auto* p1 = a.allocate(10);
+        BOOST_TEST(p1);
+        auto* p3 = a.allocate(64);
+        BOOST_TEST(p3);
+        for (unsigned i = 0; i < 10; ++i) {
+            auto* p0 = a.allocate(128);
+            BOOST_TEST(p0);
+            a.deallocate(p0);
+        }
+        a.deallocate(p1);
+        a.deallocate(p3);
+    }
+
+    {
+        auto* p1 = a.allocate(128);
+        BOOST_TEST(p1);
+        for (unsigned i = 0; i < 10; ++i) {
+            auto* p0 = a.allocate(32);
+            auto* p3 = a.allocate(64);
+            BOOST_TEST(p0);
+            BOOST_TEST(p3);
+            a.deallocate(p0);
+            a.deallocate(p3);
+        }
+        a.deallocate(p1);
+    }
+
+    for (unsigned i = 1; i < 10; ++i) {
+        auto* p0 = a.allocate(i);
+        auto* p1 = a.allocate(i * 3);
         BOOST_TEST(p0);
         BOOST_TEST(p1);
         a.deallocate(p0);
         a.deallocate(p1);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(slab_allocator_tortue) {
+    dmn::slab_allocator_t a;
+    std::vector<void*> allocated;
+    allocated.reserve(a.slabs_count);
+    std::default_random_engine dre{};
+
+    for (unsigned chunks = 1; chunks < a.slabs_count; ++chunks) {
+        for (unsigned i = 0; i < 10; ++i) {
+            for (unsigned j = 0; j < a.slabs_count / chunks; ++j) {
+                auto* p = a.allocate(a.slab_size * chunks);
+                BOOST_TEST(p);
+                allocated.push_back(p);
+            }
+
+            std::shuffle(allocated.begin(), allocated.end(), dre);
+
+            for (unsigned j = 0; j < a.slabs_count / chunks; ++j) {
+                auto* p = allocated.back();
+                allocated.pop_back();
+                BOOST_TEST(p);
+                a.deallocate(p);
+            }
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(slab_allocator_fragmentation) {
+    dmn::slab_allocator_t a;
+    std::vector<void*> allocated;
+    allocated.reserve(a.slabs_count);
+    std::default_random_engine dre{};
+
+    for (unsigned j = 0; j < a.slabs_count; ++j) {
+        auto* p = a.allocate(a.slab_size);
+        BOOST_TEST(p);
+        allocated.push_back(p);
+    }
+
+    for (unsigned i = 0; i < 40; ++i) {
+        std::shuffle(allocated.begin(), allocated.end(), dre);
+
+        auto* p = allocated.back();
+        a.deallocate(p);
+        allocated.back() = a.allocate(a.slab_size);
+        BOOST_TEST(allocated.back());
+    }
+
+    for (void* p: allocated) {
+        a.deallocate(p);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(slab_allocator_test_zeros) {
+    dmn::slab_allocator_t a;
+    for (unsigned i = 0; i < 20; ++i) {
+        BOOST_TEST(a.allocate(0) == nullptr);
+    }
+
+    a.deallocate(nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(slab_allocator_test_huge_block) {
+    dmn::slab_allocator_t a;
+    for (unsigned i = 0; i < 10; ++i) {
+        auto* p = a.allocate(512);
+        BOOST_TEST(p);
+        a.deallocate(p);
     }
 }
 

@@ -26,5 +26,10 @@ inline cbytes_ptr_t as_bytes_ptr(const void* p) noexcept {
     type& operator=(type&&) = delete        \
     /**/
 
+#if defined(BOOST_DISABLE_ASSERTS) || defined(NDEBUG)
+#   define DMN_DEBUG 0
+#else
+#   define DMN_DEBUG 1
+#endif
 
 } // namespace dmn
