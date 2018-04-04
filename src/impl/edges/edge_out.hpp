@@ -14,7 +14,6 @@ template <class Packet>
 struct edge_out_t {
     using link_t = netlink_t<Packet, tcp_write_proto_t>;
     using netlinks_t = lazy_array<link_t>;
-    using queue_t = silent_mt_queue<Packet>;
 
 private:
     const std::uint16_t     edge_id_for_receiver_;
@@ -115,7 +114,7 @@ template <class Packet>
 struct edge_out_round_robin_t final: public edge_out_t<Packet> {
     using base_t = edge_out_t<Packet>;
 
-    using queue_t = typename base_t::queue_t;
+    using queue_t = silent_mt_queue<Packet>;
     using link_t = typename base_t::link_t;
     using netlinks_t = typename base_t::netlinks_t;
 
@@ -194,5 +193,90 @@ public:
         try_send(); // Rechecking for case when some write operation was finished before we pushed into the data_to_send_
     }
 };
+
+template <class Packet>
+struct edge_out_exact_t final: public edge_out_t<Packet> {
+    using base_t = edge_out_t<Packet>;
+
+    using queue_t = silent_mt_queue<Packet>;
+    using link_t = typename base_t::link_t;
+    using netlinks_t = typename base_t::netlinks_t;
+
+private:
+    std::atomic_uintmax_t   last_used_link{0};
+    queue_t                 data_to_send_{};
+
+    template <class Container>
+    struct round_robin_balancer_t {
+        Container&             c_;
+        const std::size_t      start_index_;
+
+        circular_iterator<Container> begin() const noexcept {
+            return circular_iterator<Container>(c_, start_index_, c_.size());
+        }
+
+        circular_iterator<Container> end() const noexcept {
+            return circular_iterator<Container>();
+        }
+    };
+
+    round_robin_balancer_t<netlinks_t> links_balancer() noexcept {
+        return {base_t::netlinks_, last_used_link.fetch_add(1, std::memory_order_relaxed)};
+    }
+
+    void try_send() {
+        for (auto& v: links_balancer()) {
+            tcp_write_proto_t::guard_t lock = v.try_lock();
+            if (!lock) {
+                continue;
+            }
+
+            auto p = data_to_send_.try_pop();
+            if (!p) {
+                return;
+            }
+
+            const auto buf = base_t::get_buf(v, std::move(*p));
+            v.async_send(std::move(lock), buf);
+            break;
+        }
+    }
+
+public:
+    explicit edge_out_exact_t(std::uint16_t edge_id_for_receiver)
+        : base_t(edge_id_for_receiver)
+    {}
+
+    void assert_no_more_data() noexcept {
+        BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
+    }
+
+    void try_steal_work(tcp_write_proto_t::guard_t guard) final {
+        auto v = data_to_send_.try_pop();
+        if (!v) {
+            return;
+        }
+
+        auto& link = base_t::link_from_guard(guard);
+        const auto buf = base_t::get_buf(link, std::move(*v));
+        link.async_send(std::move(guard), buf);
+    }
+
+    void reschedule_packet_from_link(const tcp_write_proto_t::guard_t& guard) final {
+        auto& link = base_t::link_from_guard(guard);
+        auto p = std::move(link.packet);
+
+        BOOST_ASSERT_MSG(!base_t::empty_packet(p), "Scheduling an empty packet without headers for push_immediate sending. This must not be produced by accepting vertexes");
+        data_to_send_.silent_push_front(std::move(p));
+        try_send();
+    }
+
+    void push(wave_id_t /*wave*/, Packet p) final {
+        BOOST_ASSERT_MSG(!base_t::empty_packet(p), "Scheduling an empy packet without headers for sending. This must not be produced by accepting vertexes");
+        data_to_send_.silent_push(std::move(p));
+        try_send(); // Rechecking for case when some write operation was finished before we pushed into the data_to_send_
+    }
+};
+
 
 }

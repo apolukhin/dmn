@@ -4,6 +4,7 @@
 #include <new>
 #include <type_traits>
 #include <algorithm>
+#include <boost/config.hpp>
 #include <boost/assert.hpp>
 
 namespace dmn {

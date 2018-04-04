@@ -8,9 +8,6 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/test/data/test_case.hpp>
 
-#include "node_base.hpp"
-#include "stream.hpp"
-
 namespace tests {
 
 enum class actions {
@@ -19,11 +16,20 @@ enum class actions {
     resend,
 };
 
+struct node_params {
+    const char* node_name;
+    actions act;
+    int hosts = 1;
+};
+
 class nodes_tester_t {
     nodes_tester_t(const nodes_tester_t&) = delete;
     nodes_tester_t& operator=(const nodes_tester_t&) = delete;
 
-    std::vector<std::unique_ptr<dmn::node_base_t>> nodes_;
+    const std::string links_;
+    std::initializer_list<node_params> params_;
+    bool test_function_called_ = false;
+
     int threads_count_ = 1;
     std::vector<std::thread> threads_;
 
@@ -37,18 +43,15 @@ class nodes_tester_t {
 
     std::map<int, unsigned> seq_ethalon() const;
 
-    void generate_sequence(dmn::stream_t& s) const;
-    void remember_sequence(dmn::stream_t& s) const;
-    void resend_sequence(dmn::stream_t& s) const;
+    void generate_sequence(void* s_void) const;
+    void remember_sequence(void* s_void) const;
+    void resend_sequence(void* s_void) const;
 
 public:
-    struct node_params {
-        const char* node_name;
-        actions act;
-        int hosts = 1;
-    };
-
-    nodes_tester_t(const std::string& links, std::initializer_list<node_params> params);
+    nodes_tester_t(std::string links, std::initializer_list<node_params> params)
+        : links_(std::move(links))
+        , params_(params)
+    {}
 
     nodes_tester_t& threads(int threads_count) {
         threads_count_ = threads_count;
@@ -60,15 +63,15 @@ public:
         return *this;
     }
 
-    void poll();
+    void test();
 
     ~nodes_tester_t() {
-        BOOST_TEST(nodes_.empty());
+        BOOST_TEST(test_function_called_);
     }
 };
 
 }
 
-using tests::actioins;
+using tests::actions;
 using tests::nodes_tester_t;
 

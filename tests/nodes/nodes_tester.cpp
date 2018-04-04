@@ -4,6 +4,9 @@
 #include <boost/lexical_cast.hpp>
 #include <thread>
 
+#include "node_base.hpp"
+#include "stream.hpp"
+
 namespace tests {
 
 std::map<int, unsigned> nodes_tester_t::seq_ethalon() const {
@@ -14,8 +17,9 @@ std::map<int, unsigned> nodes_tester_t::seq_ethalon() const {
     return res;
 }
 
-void nodes_tester_t::generate_sequence(dmn::stream_t& s) const {
-    const unsigned seq = sequence_counter_.fetch_add(1);
+void nodes_tester_t::generate_sequence(void* s_void) const {
+    dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
+    const int seq = sequence_counter_.fetch_add(1);
 
     if (seq <= max_seq_) {
         auto data = boost::lexical_cast<std::string>(seq);
@@ -27,7 +31,8 @@ void nodes_tester_t::generate_sequence(dmn::stream_t& s) const {
     }
 }
 
-void nodes_tester_t::remember_sequence(dmn::stream_t& s) const {
+void nodes_tester_t::remember_sequence(void* s_void) const {
+    dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     for (const char* data_type: {"seq", "seq0", "seq1", "seq2", "seq3", "seq4", "seq5", "seq6", "seq7", "seq8", "seq9", "seq10"}) {
         const auto data = s.get_data(data_type);
         if (data.second == 0) {
@@ -35,13 +40,14 @@ void nodes_tester_t::remember_sequence(dmn::stream_t& s) const {
         }
         unsigned seq = 0;
         const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
-        BOOST_CHECK(res);
         std::lock_guard<std::mutex> l(seq_mutex_);
+        BOOST_CHECK(res);   // Not thread safe! Called under a mutex!
         ++sequences_[seq];
     }
 }
 
-void nodes_tester_t::resend_sequence(dmn::stream_t& s) const {
+void nodes_tester_t::resend_sequence(void* s_void) const {
+    dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     const auto data = s.get_data("seq");
     s.add(data.first, data.second, "seq");
 }
@@ -65,15 +71,16 @@ void nodes_tester_t::poll_impl() {
     threads_.clear();
 }
 
-nodes_tester_t::nodes_tester_t(const std::string& links, std::initializer_list<node_params> params) {
-    nodes_.reserve(params.size());
+void nodes_tester_t::test() {
+    std::vector<std::unique_ptr<dmn::node_base_t>> nodes;
+    nodes.reserve(params_.size());
 
     unsigned short port_num = 44000;
     std::string g = "digraph test {\n";
-    for (const auto& p : params) {
+    for (const auto& p : params_) {
         g += p.node_name;
         g += " [hosts = \"";
-        for (unsigned i = 0; i < p.hosts; ++i) {
+        for (int i = 0; i < p.hosts; ++i) {
             if (i) {
                 g += ';';
             }
@@ -82,44 +89,44 @@ nodes_tester_t::nodes_tester_t(const std::string& links, std::initializer_list<n
         }
         g += "\"]\n";
     }
-    g += links + "}";
+    g += links_ + "}";
 
-    for (const auto& p : params) {
-        for (unsigned host_id = 0; host_id < p.hosts; ++host_id) {
+    for (const auto& p : params_) {
+        for (int host_id = 0; host_id < p.hosts; ++host_id) {
             auto new_node = dmn::make_node(g, p.node_name, host_id);
             BOOST_TEST(!!new_node);
 
-            nodes_.push_back(std::move(new_node));
+            nodes.push_back(std::move(new_node));
             switch (p.act) {
             case actions::generate:
-                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(s); };
+                nodes.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
                 break;
             case actions::remember:
-                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(s); };
+                nodes.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
                 break;
             case actions::resend:
-                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(s); };
+                nodes.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
                 break;
             }
 
         }
     }
-}
 
-void nodes_tester_t::poll() {
+
     poll_impl();
 
-    for (auto& node : nodes_) {
+    for (auto& node : nodes) {
         node->shutdown_gracefully();
         poll_impl();
 
         node.reset();
         poll_impl();
     }
-    nodes_.clear();
+    nodes.clear();
 
 
     BOOST_TEST(sequences_ == seq_ethalon());
+    test_function_called_ = true;
 }
 
 }

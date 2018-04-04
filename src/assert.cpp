@@ -1,6 +1,7 @@
 #include <stdexcept>    // std::logic_error
 #include <iostream>     // std::cerr
 #include <boost/stacktrace.hpp>
+#include <boost/throw_exception.hpp>
 
 namespace boost {
     void assertion_failed_msg(char const* expr, char const* msg, char const* function, char const* file, long line) {

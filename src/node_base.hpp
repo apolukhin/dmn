@@ -12,7 +12,7 @@
 
 namespace dmn {
 
-struct stream_t;
+class stream_t;
 
 class node_base_t: public node_t, public state_tracker_t {
     DMN_PINNED(node_base_t);
