@@ -78,5 +78,6 @@ add_executable(dmn src/main.cpp)
 
 
 aux_source_directory(tests SRC_LIST_TESTS)
-add_executable(dmn_tests ${SRC_LIST_TESTS} tests/tests_common.hpp)
+aux_source_directory(tests/nodes SRC_LIST_TESTS_NODES)
+add_executable(dmn_tests ${SRC_LIST_TESTS} ${SRC_LIST_TESTS_NODES} tests/tests_common.hpp)
 target_link_libraries(dmn_tests dmn_core boost_system boost_regex boost_graph -ldl ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} -lpthread)

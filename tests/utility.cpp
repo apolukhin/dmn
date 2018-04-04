@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(slab_allocator_test_zeros) {
 BOOST_AUTO_TEST_CASE(slab_allocator_test_huge_block) {
     dmn::slab_allocator_t a;
     for (unsigned i = 0; i < 10; ++i) {
-        auto* p = a.allocate(512);
+        auto* p = a.allocate(256);
         BOOST_TEST(p);
         a.deallocate(p);
     }
