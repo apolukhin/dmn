@@ -64,6 +64,9 @@ void resend_sequence(dmn::stream_t& s) {
 template <unsigned Shift>
 void resend_shifted_sequence(dmn::stream_t& s) {
     const auto data = s.get_data("seq");
+    if (data.second == 0) {
+        return;
+    }
 
     unsigned seq = 0;
     const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
@@ -349,8 +352,6 @@ BOOST_AUTO_TEST_CASE(make_nodes_duplicate_10_end_to_end) {
     BOOST_CHECK(sequences == seq_ethalon());
 }
 
-/* // TODO: UNCOMMENT and FIX
-
 BOOST_AUTO_TEST_CASE(make_nodes_combine_2_end_to_end) {
     sequence_counter = 0;
     sequences.clear();
@@ -384,4 +385,3 @@ BOOST_AUTO_TEST_CASE(make_nodes_combine_2_end_to_end) {
     //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
     BOOST_CHECK(sequences == seq_ethalon(max_seq * 2 + 1));
 }
-*/
