@@ -75,7 +75,7 @@ before_install:
 script:
     - cmake -DCMAKE_BUILD_TYPE=Debug -DBOOST_ROOT=$BOOST .
     - make -j4
-    - LSAN_OPTIONS=verbosity=1:log_threads=1 LD_LIBRARY_PATH=$BOOST/stage/lib:$LD_LIBRARY_PATH ./dmn_tests
+    - LD_LIBRARY_PATH=$BOOST/stage/lib:$LD_LIBRARY_PATH ./dmn_tests --log_level=test_suite
 
 
 after_success:
