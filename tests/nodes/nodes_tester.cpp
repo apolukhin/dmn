@@ -113,14 +113,13 @@ void nodes_tester_t::test() {
     }
 
 
-    run_impl();
+    dmn::node_base_t::ios().reset();
+    // TODO: run generators in parallel
+    dmn::node_base_t::ios().poll(); // Starting all the generators
     for (auto& node : nodes) {
         node->shutdown_gracefully();
-        run_impl();
-
-        node.reset();
-        run_impl();
     }
+    run_impl();
     nodes.clear();
 
 
