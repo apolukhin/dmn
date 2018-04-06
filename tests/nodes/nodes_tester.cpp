@@ -129,5 +129,9 @@ void nodes_tester_t::test() {
     BOOST_TEST(sequences_ == ethalon_sequences_);
     test_function_called_ = true;
 }
-
+    
+nodes_tester_t::~nodes_tester_t() noexcept {
+    BOOST_TEST(test_function_called_);
+}
+    
 }
