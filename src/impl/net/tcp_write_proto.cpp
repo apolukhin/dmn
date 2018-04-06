@@ -31,8 +31,6 @@ tcp_write_proto_t::tcp_write_proto_t(
     , helper_id_(helper_id)
 {}
 
-tcp_write_proto_t::~tcp_write_proto_t() = default;
-
 void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     ASSERT_GUARD(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
@@ -56,7 +54,7 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
 
 void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buffer, 2> buf) {
     ASSERT_GUARD(g);
-    BOOST_ASSERT(socket_.is_open());
+    BOOST_ASSERT_MSG(socket_.is_open(), "We allow closing write connections only by destructor calls.");
 
     auto on_write = [guard = std::move(g), buf, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
@@ -74,14 +72,12 @@ void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buff
     );
 }
 
-void tcp_write_proto_t::close(guard_t g) noexcept {
-    ASSERT_GUARD(g);
+    
+tcp_write_proto_t::~tcp_write_proto_t() noexcept {
     boost::system::error_code ignore;
     socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
     socket_.close(ignore);
-    g.release(); // leaving link in locked state
-    BOOST_ASSERT_MSG(write_lock_.load() != 0, "After close the connection is not locked");
-    BOOST_ASSERT_MSG(write_lock_.load() == 1, "After close the connection is locked multiple times");
+    BOOST_ASSERT_MSG(write_lock_.load() == 0, "The write connection is locked in destructor");
 }
 
 tcp_write_proto_t::guard_t tcp_write_proto_t::try_lock() noexcept {
