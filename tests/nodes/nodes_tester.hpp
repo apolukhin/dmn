@@ -54,10 +54,7 @@ class nodes_tester_t {
     void resend_sequence(void* s_void) const;
 
 public:
-    nodes_tester_t(std::string links, std::initializer_list<node_params> params)
-        : links_(std::move(links))
-        , params_(params)
-    {}
+    nodes_tester_t(std::string links, std::initializer_list<node_params> params);
 
     nodes_tester_t& threads(int threads_count) {
         threads_count_ = threads_count;
