@@ -14,7 +14,8 @@ enum class node_state: unsigned {
 };
 
 class state_tracker_t {
-    alignas(hardware_destructive_interference_size) std::atomic<node_state>  state_ {node_state::RUN};
+    // This variable changes very rarely. No need to alignas(hardware_destructive_interference_size)
+    std::atomic<node_state>  state_ {node_state::RUN};
 
 protected:
     virtual void on_stop_reading() noexcept = 0;
