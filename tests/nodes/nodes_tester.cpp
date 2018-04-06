@@ -130,6 +130,11 @@ void nodes_tester_t::test() {
     test_function_called_ = true;
 }
     
+nodes_tester_t::nodes_tester_t(std::string links, std::initializer_list<node_params> params)
+    : links_(std::move(links))
+    , params_(params)
+{}
+    
 nodes_tester_t::~nodes_tester_t() noexcept {
     BOOST_TEST(test_function_called_);
 }
