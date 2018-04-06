@@ -8,6 +8,10 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/test/data/test_case.hpp>
 
+namespace dmn {
+    class dmn_base_t;
+}
+
 namespace tests {
 
 enum class actions {
@@ -32,6 +36,7 @@ class nodes_tester_t {
 
     int threads_count_ = 1;
     std::vector<std::thread> threads_;
+    std::vector<std::unique_ptr<dmn::node_base_t>> nodes_;
 
     void run_impl();
 
@@ -40,6 +45,7 @@ class nodes_tester_t {
     mutable std::atomic<int> sequence_counter_{0};
     mutable std::mutex  seq_mutex_;
     mutable std::map<int, unsigned> sequences_;
+    std::map<int, unsigned> ethalon_sequences_;
 
     std::map<int, unsigned> seq_ethalon() const;
 
