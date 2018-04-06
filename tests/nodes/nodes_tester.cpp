@@ -40,9 +40,20 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
         }
         unsigned seq = 0;
         const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
-        std::lock_guard<std::mutex> l(seq_mutex_);
-        BOOST_CHECK(res);   // Not thread safe! Called under a mutex!
-        ++sequences_[seq];
+        bool shutdown = false;
+        {
+            std::lock_guard<std::mutex> l(seq_mutex_);
+            if (!res) {
+                BOOST_CHECK(res);   // Not thread safe! Called under a mutex!
+            }
+            ++sequences_[seq];
+            shutdown = (sequences_ == ethalon_sequences_);
+        }
+        if (shutdown) {
+            for (const auto& node : nodes_) {
+                node->shutdown_gracefully();
+            }
+        }
     }
 }
 
@@ -72,8 +83,7 @@ void nodes_tester_t::run_impl() {
 }
 
 void nodes_tester_t::test() {
-    std::vector<std::unique_ptr<dmn::node_base_t>> nodes;
-    nodes.reserve(params_.size());
+    nodes_.reserve(params_.size());
 
     unsigned short port_num = 44000;
     std::string g = "digraph test {\n";
@@ -96,34 +106,27 @@ void nodes_tester_t::test() {
             auto new_node = dmn::make_node(g, p.node_name, host_id);
             BOOST_TEST(!!new_node);
 
-            nodes.push_back(std::move(new_node));
+            nodes_.push_back(std::move(new_node));
             switch (p.act) {
             case actions::generate:
-                nodes.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
+                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
                 break;
             case actions::remember:
-                nodes.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
+                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
                 break;
             case actions::resend:
-                nodes.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
+                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
                 break;
             }
 
         }
     }
 
-
-    dmn::node_base_t::ios().reset();
-    // TODO: run generators in parallel
-    dmn::node_base_t::ios().poll(); // Starting all the generators
-    for (auto& node : nodes) {
-        node->shutdown_gracefully();
-    }
+    ethalon_sequences_ = seq_ethalon();
     run_impl();
-    nodes.clear();
+    nodes_.clear();
 
-
-    BOOST_TEST(sequences_ == seq_ethalon());
+    BOOST_TEST(sequences_ == ethalon_sequences_);
     test_function_called_ = true;
 }
 
