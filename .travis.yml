@@ -20,9 +20,10 @@ env:
         - IGNORE_COVERAGE='*/boost-local/*'
 
     matrix:
-        - CXXFLAGS="-fuse-ld=gold --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
-        - CXXFLAGS="-fuse-ld=gold -fsanitize=thread" LDFLAGS="-ltsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
-        - CXXFLAGS="-Wno-c++11-narrowing --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -fsanitize=address,leak,undefined" CC=clang-6.0 CXX=clang++-6.0 TOOLSET=clang-6.0
+        - BUILD_TYPE=Debug CXXFLAGS="-fuse-ld=gold --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -lasan -lubsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
+        - BUILD_TYPE=Debug CXXFLAGS="-fuse-ld=gold -fsanitize=thread" LDFLAGS="-ltsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
+        - BUILD_TYPE=Release CXXFLAGS="-fuse-ld=gold -fsanitize=thread" LDFLAGS="-ltsan" CC=gcc-7 CXX=g++-7 GCOV="--gcov-tool gcov-7" TOOLSET=gcc-7
+        - BUILD_TYPE=Debug CXXFLAGS="-Wno-c++11-narrowing --coverage -fsanitize=address,leak,undefined" LDFLAGS="--coverage -fsanitize=address,leak,undefined" CC=clang-6.0 CXX=clang++-6.0 TOOLSET=clang-6.0
 
 ###############################################################################################################
 # From this point and below code is same for all the Boost libs
@@ -73,7 +74,7 @@ before_install:
     - cd $PROJECT_DIR
 
 script:
-    - cmake -DCMAKE_BUILD_TYPE=Debug -DBOOST_ROOT=$BOOST .
+    - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBOOST_ROOT=$BOOST .
     - make -j4
     - LD_LIBRARY_PATH=$BOOST/stage/lib:$LD_LIBRARY_PATH ./dmn_tests --log_level=test_suite
 
