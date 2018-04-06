@@ -71,9 +71,7 @@ public:
 
     void test();
 
-    ~nodes_tester_t() {
-        BOOST_TEST(test_function_called_);
-    }
+    ~nodes_tester_t() noexcept;
 };
 
 }
