@@ -20,7 +20,8 @@ tcp_read_proto_t::~tcp_read_proto_t() = default;
 
 
 void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {
-    BOOST_ASSERT(socket_.is_open());
+    // shutdown_gracefully could happen between on_operation_finished_ and async_read.
+    // Allow ASIO deal with that, instead of calling 'BOOST_ASSERT(socket_.is_open());' here.
 
     auto on_read = [this, data](const boost::system::error_code& e, std::size_t bytes_read) {
         if (e) {
