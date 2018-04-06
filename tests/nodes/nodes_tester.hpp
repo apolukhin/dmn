@@ -9,7 +9,7 @@
 #include <boost/test/data/test_case.hpp>
 
 namespace dmn {
-    class dmn_base_t;
+    class node_base_t;
 }
 
 namespace tests {
