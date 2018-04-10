@@ -29,7 +29,7 @@ class node_impl_read_1: public virtual node_base_t {
     }
 
     void on_accept(const boost::system::error_code& error) {
-        if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
+        if (error.value() == boost::asio::error::operation_aborted && ios().stopped()) {
             edge_.close_links();
             return;
         }
@@ -83,16 +83,9 @@ public:
         start_accept();
     }
 
-    void on_stop_reading() noexcept final {
+    void single_threaded_io_detach_read() noexcept {
         acceptor_.close();
-    }
-
-    ~node_impl_read_1() noexcept override {
-        boost::system::error_code ignore;
-        acceptor_.close(ignore);
-
-        const auto links_count = edge_.close_links();
-        BOOST_ASSERT_MSG(links_count == 0, "Not all the links exited before shutdown");
+        edge_.close_links();
     }
 };
 

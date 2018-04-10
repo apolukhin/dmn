@@ -23,14 +23,6 @@ public:
         out_data_.header().wave_id = in_data_.header().wave_id;
     }
 
-    void stop() {
-        node_.shutdown_gracefully();
-    }
-
-    bool is_stopping() const noexcept {
-        return node_.state() != node_state::RUN;
-    }
-
     packet_t&& move_out_data() noexcept {
         return std::move(out_data_);
     }

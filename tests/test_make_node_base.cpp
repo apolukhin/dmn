@@ -12,7 +12,7 @@
 #include <iostream>
 
 #include "tests_common.hpp"
-
+/*
 void noop(dmn::stream_t& e){
     e.stop();
 }
@@ -193,3 +193,4 @@ BOOST_AUTO_TEST_CASE(make_nodes_bradcast_base) {
 
     tests::shutdown_nodes(node_a, node_b, node_c, node_d);
 }
+*/

@@ -25,7 +25,7 @@ class node_impl_read_0: public virtual node_base_t {
             p.place_header();
             p.header().wave_id = new_wave();
 
-            if (state() == node_state::RUN) {
+            if (!ios().stopped()) {
                 start();
             }
 
@@ -37,9 +37,7 @@ public:
         start(); // TODO: mutithreaded run
     }
 
-    void on_stop_reading() noexcept final {
-        // Noop
-    }
+    void single_threaded_io_detach_read() noexcept {}
 
     ~node_impl_read_0() noexcept override = default;
 };

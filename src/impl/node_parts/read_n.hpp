@@ -85,7 +85,7 @@ class node_impl_read_n: public virtual node_base_t {
     }
 
     void on_accept(const boost::system::error_code& error) {
-        if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
+        if (error.value() == boost::asio::error::operation_aborted && ios().stopped()) {
             unknown_links_.close();
 
             for_each_edge([](auto& e){
@@ -159,21 +159,11 @@ public:
         start_accept();
     }
 
-    void on_stop_reading() noexcept final {
+    void single_threaded_io_detach_read() noexcept {
         acceptor_.close();
-    }
-
-    ~node_impl_read_n() noexcept override {
-        boost::system::error_code ignore;
-        acceptor_.close(ignore);
-        unknown_links_.close();
-
-        std::size_t links_count = 0;
-        for_each_edge([&links_count](auto& e){
-            links_count += e.close_links();
+        for_each_edge([](auto& e){
+            e.close_links();
         });
-
-        BOOST_ASSERT_MSG(links_count == 0, "Not all the links exited before shutdown");
     }
 };
 

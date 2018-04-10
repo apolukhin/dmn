@@ -164,7 +164,7 @@ public:
     {}
 
     void assert_no_more_data() noexcept {
-        BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
+        //BOOST_ASSERT_MSG(!data_to_send_.try_pop(), "Have data to send");
     }
 
     void try_steal_work(tcp_write_proto_t::guard_t guard) final {

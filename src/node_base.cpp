@@ -29,8 +29,9 @@ namespace {
     }
 }
 
-node_base_t::node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_id)
-    : config(std::move(in))
+node_base_t::node_base_t(boost::asio::io_context& ios, graph_t in, const char* node_id, std::uint16_t host_id)
+    : node_t{ios}
+    , config(std::move(in))
     , this_node_descriptor(get_this_node_descriptor(config, node_id))
     , this_node(config[this_node_descriptor])
     , host_id_(host_id)
@@ -109,17 +110,22 @@ node_base_t::~node_base_t() noexcept = default;
 
 
 
-
 template <class Read, class Write>
 struct node_in_x_out_x final: Read, Write {
-    node_in_x_out_x(graph_t&& in, const char* node_id, std::uint16_t host_id)
-        : node_base_t(std::move(in), node_id, host_id)
+    node_in_x_out_x(boost::asio::io_context& ios, graph_t in, const char* node_id, std::uint16_t host_id)
+        : node_base_t(ios, std::move(in), node_id, host_id)
         , Read()
         , Write()
     {}
 
-    using Read::on_stop_reading;
     using Write::on_packet_accept;
+
+    void single_threaded_io_detach() noexcept final {
+        BOOST_ASSERT_MSG(Read::ios().stopped(), "Running single_threaded_io_detach() while ios() is not stopped is forbidden!");
+        BOOST_ASSERT_MSG(Write::ios().stopped(), "Running single_threaded_io_detach() while ios() is not stopped is forbidden!");
+        Read::single_threaded_io_detach_read();
+        Write::single_threaded_io_detach_write();
+    }
 
     ~node_in_x_out_x() noexcept = default;
 };
@@ -136,7 +142,7 @@ using node_in_n_out_1 = node_in_x_out_x<node_impl_read_n, node_impl_write_1>;
 using node_in_n_out_n = node_in_x_out_x<node_impl_read_n, node_impl_write_n>;
 
 
-std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_id, std::uint16_t host_id) {
+std::unique_ptr<node_base_t> make_node(boost::asio::io_context& ios, const std::string& in, const char* node_id, std::uint16_t host_id) {
     graph_t graph = load_graph(in);
     const auto this_node_descriptor = get_this_node_descriptor(graph, node_id);
 
@@ -171,16 +177,16 @@ std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_i
     );
 
     switch(type) {
-    case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(std::move(graph), node_id, host_id);
-    case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(std::move(graph), node_id, host_id);
-    case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(std::move(graph), node_id, host_id);
-    case node_types_t::IN_0_OUT_N: return boost::make_unique<node_in_0_out_n>(std::move(graph), node_id, host_id);
-    case node_types_t::IN_1_OUT_N: return boost::make_unique<node_in_1_out_n>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_1_OUT_0: return boost::make_unique<node_in_1_out_0>(ios, std::move(graph), node_id, host_id);
+    case node_types_t::IN_0_OUT_1: return boost::make_unique<node_in_0_out_1>(ios, std::move(graph), node_id, host_id);
+    case node_types_t::IN_1_OUT_1: return boost::make_unique<node_in_1_out_1>(ios, std::move(graph), node_id, host_id);
+    case node_types_t::IN_0_OUT_N: return boost::make_unique<node_in_0_out_n>(ios, std::move(graph), node_id, host_id);
+    case node_types_t::IN_1_OUT_N: return boost::make_unique<node_in_1_out_n>(ios, std::move(graph), node_id, host_id);
 
     // TODO: This is currently incorrectly covered in tests! Tests must be fixed!!!
-    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_n_out_0>(std::move(graph), node_id, host_id);
-    case node_types_t::IN_N_OUT_1: return boost::make_unique<node_in_n_out_1>(std::move(graph), node_id, host_id);
-    case node_types_t::IN_N_OUT_N: return boost::make_unique<node_in_n_out_n>(std::move(graph), node_id, host_id);
+    case node_types_t::IN_N_OUT_0: return boost::make_unique<node_in_n_out_0>(ios, std::move(graph), node_id, host_id);
+    case node_types_t::IN_N_OUT_1: return boost::make_unique<node_in_n_out_1>(ios, std::move(graph), node_id, host_id);
+    case node_types_t::IN_N_OUT_N: return boost::make_unique<node_in_n_out_n>(ios, std::move(graph), node_id, host_id);
 
     default:
         BOOST_ASSERT_MSG(false, "Error in make_node function - not all node types are handled");

@@ -101,7 +101,7 @@ class node_impl_write_n: public virtual node_base_t {
         auto& link = edge_t::link_from_guard(guard);
         // TODO: async log issue
 
-        if (state() != node_state::RUN) {
+        if (ios().stopped()) {
             // Do not reconnect
             link.close(std::move(guard));
             return;
@@ -177,19 +177,10 @@ public:
         }
     }
 
-    ~node_impl_write_n() noexcept override {
-        const bool soft_shutdown = started_at_least_1_link_.load();
-
+    void single_threaded_io_detach_write() noexcept {
         for (auto& edge: edges_) {
-            if (soft_shutdown) {
-                edge.assert_no_more_data();
-            }
-
             edge.close_links();
         }
-//BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
-//        BOOST_ASSERT_MSG(!soft_shutdown || !pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
-        BOOST_ASSERT_MSG(!soft_shutdown || !packets_.pending_packets(), "Stopped writing in soft shutdown, but still have pending_packets");
     }
 };
 

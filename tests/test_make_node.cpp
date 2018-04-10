@@ -13,7 +13,7 @@
 
 #include "tests_common.hpp"
 
-
+/*
 namespace {
 
 std::atomic<unsigned> sequence_counter{0};
@@ -384,4 +384,4 @@ BOOST_AUTO_TEST_CASE(make_nodes_combine_2_end_to_end) {
 
     //std::for_each(sequences.begin(), sequences.end(), [](auto val){ std::cerr << '{' << val.first << ',' << val.second << '}'; });
     BOOST_CHECK(sequences == seq_ethalon(max_seq * 2 + 1));
-}
+}*/

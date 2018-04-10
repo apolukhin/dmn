@@ -14,7 +14,7 @@ namespace dmn {
 
 class stream_t;
 
-class node_base_t: public node_t, public state_tracker_t {
+class node_base_t: public node_t {
     DMN_PINNED(node_base_t);
 
 public:
@@ -29,8 +29,7 @@ public:
     callback_t callback_{};
 
     // Functions:
-    node_base_t(graph_t&& in, const char* node_id, std::uint16_t host_id);
-
+    node_base_t(boost::asio::io_context& ios, graph_t in, const char* node_id, std::uint16_t host_id);
 
     std::uint16_t edge_id_for_receiver(std::uint16_t out_edge_index = 0);
     std::uint16_t count_in_edges() const noexcept;
@@ -39,9 +38,10 @@ public:
 
     virtual void on_packet_accept(packet_t packet) = 0;
     packet_t call_callback(packet_t packet) noexcept;
+    virtual void single_threaded_io_detach() noexcept = 0;
     virtual ~node_base_t() noexcept;
 };
 
-std::unique_ptr<node_base_t> make_node(const std::string& in, const char* node_id, std::uint16_t host_id);
+std::unique_ptr<node_base_t> make_node(boost::asio::io_context& ios, const std::string& in, const char* node_id, std::uint16_t host_id);
 
 }

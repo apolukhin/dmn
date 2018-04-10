@@ -22,13 +22,11 @@ private:
     >   netlinks_;
 
 public:
-    std::size_t close_links() noexcept {
+    void close_links() noexcept {
         std::unique_lock<std::mutex> guard(netlinks_mutex_);
         for (auto& v: netlinks_) {   // TODO: balancing
             v->close();
         }
-
-        return netlinks_.size();
     }
 
     link_t& add_link(std::unique_ptr<link_t> link_ptr) {

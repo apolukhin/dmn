@@ -5,6 +5,7 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/read.hpp>
+#include <boost/asio/bind_executor.hpp>
 
 namespace dmn {
 
@@ -41,11 +42,9 @@ void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {
 }
 
 void tcp_read_proto_t::close() noexcept {
-    if (socket_.is_open()) {
-        boost::system::error_code ignore;
-        socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
-        socket_.close(ignore);
-    }
+    boost::system::error_code ignore;
+    socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
+    socket_.close(ignore);
 }
 
 } // namespace dmn

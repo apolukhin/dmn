@@ -13,10 +13,7 @@ public:
         call_callback(std::move(packet));
     }
 
-    ~node_impl_write_0() noexcept override {
-//        BOOST_ASSERT_MSG(!pending_writes_.get(), "Stopped writing in soft shutdown, but still have pending_writes_");
-    }
-
+    void single_threaded_io_detach_write() noexcept {}
 };
 
 }

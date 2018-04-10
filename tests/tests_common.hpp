@@ -5,6 +5,7 @@
 #include <boost/test/unit_test.hpp>
 
 namespace tests {
+/*
 namespace detail {
 
 template <class Node>
@@ -41,7 +42,7 @@ void shutdown_nodes(Node&& node, Nodes&&... nodes) {
     dmn::node_base_t::ios().poll();
     detail::shutdown_nodes_impl(std::forward<Nodes>(nodes)...);
 }
-
+*/
 
 inline dmn::packet_t clone(const dmn::packet_t& orig) {
     dmn::packet_t cloned{

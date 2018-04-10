@@ -27,7 +27,7 @@ void nodes_tester_t::generate_sequence(void* s_void) const {
     }
 
     if (seq >= max_seq_) {
-        s.stop();
+        std::this_thread::sleep_for(std::chrono::microseconds(50));
     }
 }
 
@@ -51,7 +51,7 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
         }
         if (shutdown) {
             for (const auto& node : nodes_) {
-                node->shutdown_gracefully();
+                node->ios().stop();
             }
         }
     }
@@ -64,10 +64,10 @@ void nodes_tester_t::resend_sequence(void* s_void) const {
 }
 
 
-void nodes_tester_t::run_impl() {
-    constexpr auto ios_run = []() {
-        dmn::node_base_t::ios().reset();
-        dmn::node_base_t::ios().run();
+void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
+    auto ios_run = [&ios]() {
+        ios.reset();
+        ios.run();
     };
 
     threads_.reserve(threads_count_);
@@ -83,20 +83,20 @@ void nodes_tester_t::run_impl() {
 }
 
 
-void nodes_tester_t::init_nodes_by(start_order order) {
+void nodes_tester_t::init_nodes_by(start_order order, boost::asio::io_context& ios) {
     switch (order) {
-    case start_order::node_host: init_nodes_by_node_hosts(); break;
-    case start_order::node_host_reverse: init_nodes_by_node_hosts_reverse(); break;
-    case start_order::host_node: init_nodes_by_hosts_node(); break;
+    case start_order::node_host: init_nodes_by_node_hosts(ios); break;
+    case start_order::node_host_reverse: init_nodes_by_node_hosts_reverse(ios); break;
+    case start_order::host_node: init_nodes_by_hosts_node(ios); break;
     default:
         BOOST_TEST(false);
     }
 }
 
-void nodes_tester_t::init_nodes_by_node_hosts() {
+void nodes_tester_t::init_nodes_by_node_hosts(boost::asio::io_context& ios) {
     for (const auto& p : params_) {
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
-            auto new_node = dmn::make_node(graph_, p.node_name, host_id);
+            auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
             BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
@@ -114,12 +114,12 @@ void nodes_tester_t::init_nodes_by_node_hosts() {
         }
     }
 }
-void nodes_tester_t::init_nodes_by_node_hosts_reverse() {
+void nodes_tester_t::init_nodes_by_node_hosts_reverse(boost::asio::io_context& ios) {
     for (unsigned i = 0; i < params_.size(); ++i) {
         const auto& p = *(params_.begin() + params_.size() - i - 1);
 
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
-            auto new_node = dmn::make_node(graph_, p.node_name, host_id);
+            auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
             BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
@@ -137,7 +137,7 @@ void nodes_tester_t::init_nodes_by_node_hosts_reverse() {
         }
     }
 }
-void nodes_tester_t::init_nodes_by_hosts_node() {
+void nodes_tester_t::init_nodes_by_hosts_node(boost::asio::io_context& ios) {
     bool was_host_initialized = true;
     for (int host_id = 0; was_host_initialized; ++host_id) {
         was_host_initialized = false;
@@ -148,7 +148,7 @@ void nodes_tester_t::init_nodes_by_hosts_node() {
             }
             was_host_initialized = true;
 
-            auto new_node = dmn::make_node(graph_, p.node_name, host_id);
+            auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
             BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
@@ -170,44 +170,61 @@ void nodes_tester_t::init_nodes_by_hosts_node() {
 
 void nodes_tester_t::test(start_order order) {
     nodes_.reserve(params_.size());
+    {
+        boost::asio::io_context ios{threads_count_};
+        init_nodes_by(order, ios);
 
-    init_nodes_by(order);
+        ethalon_sequences_ = seq_ethalon();
+        run_impl(ios);
 
-    ethalon_sequences_ = seq_ethalon();
-    run_impl();
+        for (auto& n : nodes_) {
+            n->single_threaded_io_detach();
+        }
+    }
+
     nodes_.clear();
-
-    BOOST_TEST(sequences_ == ethalon_sequences_);
     test_function_called_ = true;
+    BOOST_TEST(sequences_ == ethalon_sequences_);
 }
 
 
 void nodes_tester_t::test_cancellation(start_order order) {
     nodes_.reserve(params_.size());
+    {
+        boost::asio::io_context ios{threads_count_};
+        init_nodes_by(order, ios);
 
-    init_nodes_by(order);
+        sequence_max(std::numeric_limits<decltype(max_seq_)>::max());
+        ios.post(
+            [&ios]() {
+            ios.stop();
+        });
+        run_impl(ios);
 
-    sequence_max(std::numeric_limits<decltype(max_seq_)>::max());
-    dmn::node_base_t::ios().post(
-        [this]() {
-            for (const auto& node : nodes_) {
-                node->shutdown_gracefully();
-            }
+        for (auto& n : nodes_) {
+            n->single_threaded_io_detach();
         }
-    );
-    run_impl();
-    test_function_called_ = true;
-}
+    }
+
+    nodes_.clear();
+    test_function_called_ = true;}
 
 void nodes_tester_t::test_immediate_cancellation(start_order order) {
     nodes_.reserve(params_.size());
 
-    init_nodes_by(order);
-    for (const auto& node : nodes_) {
-        node->shutdown_gracefully();
+    {
+        boost::asio::io_context ios{threads_count_};
+        init_nodes_by(order, ios);
+
+        ios.stop();
+        run_impl(ios);
+
+        for (auto& n : nodes_) {
+            n->single_threaded_io_detach();
+        }
     }
 
-    run_impl();
+    nodes_.clear();
     test_function_called_ = true;
 }
     

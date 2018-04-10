@@ -11,15 +11,17 @@ namespace boost { namespace asio {
 namespace dmn {
 
 class node_t {
+    boost::asio::io_service* ios_;
+
 protected:
-    node_t() noexcept = default;
+    node_t(boost::asio::io_service& ios) noexcept : ios_(&ios) {}
     ~node_t() noexcept;
 
 public:
     node_t(const node_t&) = delete;
     node_t& operator=(const node_t&) = delete;
 
-    static boost::asio::io_service& ios() noexcept;
+    boost::asio::io_service& ios() noexcept;
 };
 
 }

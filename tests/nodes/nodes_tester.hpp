@@ -7,6 +7,7 @@
 #include <atomic>
 #include <boost/test/unit_test.hpp>
 #include <boost/test/data/test_case.hpp>
+#include <boost/asio/io_context.hpp>
 
 namespace dmn {
     class node_base_t;
@@ -53,7 +54,7 @@ class nodes_tester_t {
     std::vector<std::thread> threads_;
     std::vector<std::unique_ptr<dmn::node_base_t>> nodes_;
 
-    void run_impl();
+    void run_impl(boost::asio::io_context& ios);
 
     int max_seq_ = 10;
 
@@ -68,10 +69,10 @@ class nodes_tester_t {
     void remember_sequence(void* s_void) const;
     void resend_sequence(void* s_void) const;
 
-    void init_nodes_by(start_order order);
-    void init_nodes_by_node_hosts();
-    void init_nodes_by_node_hosts_reverse();
-    void init_nodes_by_hosts_node();
+    void init_nodes_by(start_order order, boost::asio::io_context& ios);
+    void init_nodes_by_node_hosts(boost::asio::io_context& ios);
+    void init_nodes_by_node_hosts_reverse(boost::asio::io_context& ios);
+    void init_nodes_by_hosts_node(boost::asio::io_context& ios);
 public:
     nodes_tester_t(const links_t& links, std::initializer_list<node_params> params);
     nodes_tester_t(const graph_t& graph, std::initializer_list<node_params> params);
