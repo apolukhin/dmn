@@ -57,7 +57,7 @@ class node_impl_read_n: public virtual node_base_t {
             unknown_links_.push_back(std::move(l));
         }
         
-        void cancel() {
+        void close() {
             std::lock_guard<std::mutex> lock{unknown_links_mutex_};
             for (auto& l : unknown_links_) {
                 l->close();
@@ -86,6 +86,11 @@ class node_impl_read_n: public virtual node_base_t {
 
     void on_accept(const boost::system::error_code& error) {
         if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
+            unknown_links_.close();
+
+            for_each_edge([](auto& e){
+                e.close_links();
+            });
             return;
         }
         BOOST_ASSERT_MSG(!error, "Error while accepting");
@@ -155,18 +160,13 @@ public:
     }
 
     void on_stop_reading() noexcept final {
-        acceptor_.cancel();
-        unknown_links_.cancel();
-
-        for_each_edge([](auto& e){
-            e.close_links();
-        });
+        acceptor_.close();
     }
 
     ~node_impl_read_n() noexcept override {
         boost::system::error_code ignore;
         acceptor_.close(ignore);
-        unknown_links_.cancel();
+        unknown_links_.close();
 
         std::size_t links_count = 0;
         for_each_edge([&links_count](auto& e){

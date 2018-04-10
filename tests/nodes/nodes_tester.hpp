@@ -14,10 +14,25 @@ namespace dmn {
 
 namespace tests {
 
+struct links_t {
+    std::string data;
+};
+
+struct graph_t {
+    std::string data;
+};
+
 enum class actions {
     generate,
     remember,
     resend,
+};
+
+
+enum class start_order: int {
+    node_host,
+    node_host_reverse,
+    host_node,
 };
 
 struct node_params {
@@ -30,7 +45,7 @@ class nodes_tester_t {
     nodes_tester_t(const nodes_tester_t&) = delete;
     nodes_tester_t& operator=(const nodes_tester_t&) = delete;
 
-    const std::string links_;
+    std::string graph_;
     std::initializer_list<node_params> params_;
     bool test_function_called_ = false;
 
@@ -53,8 +68,13 @@ class nodes_tester_t {
     void remember_sequence(void* s_void) const;
     void resend_sequence(void* s_void) const;
 
+    void init_nodes_by(start_order order);
+    void init_nodes_by_node_hosts();
+    void init_nodes_by_node_hosts_reverse();
+    void init_nodes_by_hosts_node();
 public:
-    nodes_tester_t(std::string links, std::initializer_list<node_params> params);
+    nodes_tester_t(const links_t& links, std::initializer_list<node_params> params);
+    nodes_tester_t(const graph_t& graph, std::initializer_list<node_params> params);
 
     nodes_tester_t& threads(int threads_count) {
         threads_count_ = threads_count;
@@ -66,13 +86,21 @@ public:
         return *this;
     }
 
-    void test();
+    void test(start_order order = start_order::node_host);
+    void test_cancellation(start_order order = start_order::node_host);
+    void test_immediate_cancellation(start_order order = start_order::node_host);
 
     ~nodes_tester_t() noexcept;
 };
 
+template <unsigned Offset, unsigned BitsPerHost = 1>
+int hosts_count_from_num(unsigned num) {
+    return ((num >> Offset) & ((1 << BitsPerHost) - 1)) + 1;
+}
+
 }
 
 using tests::actions;
+using tests::start_order;
 using tests::nodes_tester_t;
-
+using tests::hosts_count_from_num;

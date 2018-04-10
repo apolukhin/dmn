@@ -30,6 +30,7 @@ class node_impl_read_1: public virtual node_base_t {
 
     void on_accept(const boost::system::error_code& error) {
         if (error.value() == boost::asio::error::operation_aborted && state() != node_state::RUN) {
+            edge_.close_links();
             return;
         }
         BOOST_ASSERT_MSG(!error, "Error while accepting");
@@ -83,8 +84,7 @@ public:
     }
 
     void on_stop_reading() noexcept final {
-        acceptor_.cancel();
-        edge_.close_links();
+        acceptor_.close();
     }
 
     ~node_impl_read_1() noexcept override {

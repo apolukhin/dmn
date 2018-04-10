@@ -82,28 +82,21 @@ void nodes_tester_t::run_impl() {
     threads_.clear();
 }
 
-void nodes_tester_t::test() {
-    nodes_.reserve(params_.size());
 
-    unsigned short port_num = 44000;
-    std::string g = "digraph test {\n";
-    for (const auto& p : params_) {
-        g += p.node_name;
-        g += " [hosts = \"";
-        for (int i = 0; i < p.hosts; ++i) {
-            if (i) {
-                g += ';';
-            }
-            g += "127.0.0.1:" + std::to_string(port_num);
-            ++ port_num;
-        }
-        g += "\"]\n";
+void nodes_tester_t::init_nodes_by(start_order order) {
+    switch (order) {
+    case start_order::node_host: init_nodes_by_node_hosts(); break;
+    case start_order::node_host_reverse: init_nodes_by_node_hosts_reverse(); break;
+    case start_order::host_node: init_nodes_by_hosts_node(); break;
+    default:
+        BOOST_TEST(false);
     }
-    g += links_ + "}";
+}
 
+void nodes_tester_t::init_nodes_by_node_hosts() {
     for (const auto& p : params_) {
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
-            auto new_node = dmn::make_node(g, p.node_name, host_id);
+            auto new_node = dmn::make_node(graph_, p.node_name, host_id);
             BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
@@ -118,9 +111,67 @@ void nodes_tester_t::test() {
                 nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
                 break;
             }
-
         }
     }
+}
+void nodes_tester_t::init_nodes_by_node_hosts_reverse() {
+    for (unsigned i = 0; i < params_.size(); ++i) {
+        const auto& p = *(params_.begin() + params_.size() - i - 1);
+
+        for (int host_id = 0; host_id < p.hosts; ++host_id) {
+            auto new_node = dmn::make_node(graph_, p.node_name, host_id);
+            BOOST_TEST(!!new_node);
+
+            nodes_.push_back(std::move(new_node));
+            switch (p.act) {
+            case actions::generate:
+                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
+                break;
+            case actions::remember:
+                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
+                break;
+            case actions::resend:
+                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
+                break;
+            }
+        }
+    }
+}
+void nodes_tester_t::init_nodes_by_hosts_node() {
+    bool was_host_initialized = true;
+    for (int host_id = 0; was_host_initialized; ++host_id) {
+        was_host_initialized = false;
+
+        for (const auto& p : params_) {
+            if (host_id >= p.hosts) {
+                continue;
+            }
+            was_host_initialized = true;
+
+            auto new_node = dmn::make_node(graph_, p.node_name, host_id);
+            BOOST_TEST(!!new_node);
+
+            nodes_.push_back(std::move(new_node));
+            switch (p.act) {
+            case actions::generate:
+                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
+                break;
+            case actions::remember:
+                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
+                break;
+            case actions::resend:
+                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
+                break;
+            }
+        }
+    }
+
+}
+
+void nodes_tester_t::test(start_order order) {
+    nodes_.reserve(params_.size());
+
+    init_nodes_by(order);
 
     ethalon_sequences_ = seq_ethalon();
     run_impl();
@@ -129,12 +180,61 @@ void nodes_tester_t::test() {
     BOOST_TEST(sequences_ == ethalon_sequences_);
     test_function_called_ = true;
 }
+
+
+void nodes_tester_t::test_cancellation(start_order order) {
+    nodes_.reserve(params_.size());
+
+    init_nodes_by(order);
+
+    sequence_max(std::numeric_limits<decltype(max_seq_)>::max());
+    dmn::node_base_t::ios().post(
+        [this]() {
+            for (const auto& node : nodes_) {
+                node->shutdown_gracefully();
+            }
+        }
+    );
+    run_impl();
+    test_function_called_ = true;
+}
+
+void nodes_tester_t::test_immediate_cancellation(start_order order) {
+    nodes_.reserve(params_.size());
+
+    init_nodes_by(order);
+    for (const auto& node : nodes_) {
+        node->shutdown_gracefully();
+    }
+
+    run_impl();
+    test_function_called_ = true;
+}
     
-nodes_tester_t::nodes_tester_t(std::string links, std::initializer_list<node_params> params)
-    : links_(std::move(links))
-    , params_(params)
+nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_params> params)
+    : params_(params)
+{
+    unsigned short port_num = 44000;
+    graph_ = "digraph test {\n";
+    for (const auto& p : params_) {
+        graph_ += p.node_name;
+        graph_ += " [hosts = \"";
+        for (int i = 0; i < p.hosts; ++i) {
+            if (i) {
+                graph_ += ';';
+            }
+            graph_ += "127.0.0.1:" + std::to_string(port_num);
+            ++ port_num;
+        }
+        graph_ += "\"]\n";
+    }
+    graph_ += links.data + "}";
+}
+
+nodes_tester_t::nodes_tester_t(const graph_t& graph, std::initializer_list<node_params> params)
+    : graph_(graph.data)
 {}
-    
+
 nodes_tester_t::~nodes_tester_t() noexcept {
     BOOST_TEST(test_function_called_);
 }

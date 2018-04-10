@@ -41,9 +41,11 @@ void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {
 }
 
 void tcp_read_proto_t::close() noexcept {
-    boost::system::error_code ignore;
-    socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
-    socket_.close(ignore);
+    if (socket_.is_open()) {
+        boost::system::error_code ignore;
+        socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
+        socket_.close(ignore);
+    }
 }
 
 } // namespace dmn
