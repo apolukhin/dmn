@@ -34,6 +34,8 @@ enum class start_order: int {
     node_host,
     node_host_reverse,
     host_node,
+
+    end_,
 };
 
 struct node_params {

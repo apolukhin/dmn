@@ -4,6 +4,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/optional/optional.hpp>
+#include <thread>
 
 namespace dmn {
 
@@ -22,19 +23,21 @@ private:
     };
 
     boost::optional<internals>  data_;
+    const boost::asio::ip::tcp::endpoint endpoint_;
+
+    void open() {
+        data_->acceptor_.open(endpoint_.protocol());
+        data_->acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        data_->acceptor_.bind(endpoint_);
+        data_->acceptor_.listen();
+    }
 
 public:
     tcp_acceptor(boost::asio::io_context& ios, const char* host, unsigned short port)
         : data_{ios}
+        , endpoint_{boost::asio::ip::address::from_string(host), port}
     {
-        const auto endpoint = boost::asio::ip::tcp::endpoint(
-            boost::asio::ip::address::from_string(host),
-            port
-        );
-        data_->acceptor_.open(endpoint.protocol());
-        data_->acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
-        data_->acceptor_.bind(endpoint);
-        data_->acceptor_.listen();
+        open();
     }
     ~tcp_acceptor() {
         BOOST_ASSERT_MSG(!data_, "Acceptor must be closed before destruction!");

@@ -29,7 +29,13 @@ class node_impl_read_1: public virtual node_base_t {
     }
 
     void on_accept(const boost::system::error_code& error) {
-        BOOST_ASSERT_MSG(!error, "Error while accepting");
+        if (error) {
+            BOOST_ASSERT_MSG(!error, "Error while accepting");
+            // TODO: log
+
+            start_accept();
+            return;
+        }
 
         auto link_ptr = link_t::construct(
             acceptor_.extract_socket(),

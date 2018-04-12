@@ -30,6 +30,7 @@ namespace {
 
 #define MT_BOOST_TEST(x) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_TEST(x); }
 #define MT_BOOST_FAIL(x) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_FAIL(x); }
+#define MT_BOOST_WARN(x) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_WARN_MESSAGE(false, x); }
 
 std::map<int, unsigned> nodes_tester_t::seq_ethalon() const {
     std::map<int, unsigned> res;
@@ -201,6 +202,7 @@ void nodes_tester_t::init_nodes_by_hosts_node(boost::asio::io_context& ios) {
 }
 
 void nodes_tester_t::test(start_order order) {
+    test_function_called_ = true;
     nodes_.reserve(params_.size());
     {
         boost::asio::io_context ios{threads_count_};
@@ -212,12 +214,12 @@ void nodes_tester_t::test(start_order order) {
     }
 
     nodes_.clear();
-    test_function_called_ = true;
     MT_BOOST_TEST(sequences_ == ethalon_sequences_);
 }
 
 
 void nodes_tester_t::test_cancellation(start_order order) {
+    test_function_called_ = true;
     nodes_.reserve(params_.size());
     {
         boost::asio::io_context ios{threads_count_};
@@ -232,10 +234,10 @@ void nodes_tester_t::test_cancellation(start_order order) {
     }
 
     nodes_.clear();
-    test_function_called_ = true;
 }
 
 void nodes_tester_t::test_immediate_cancellation(start_order order) {
+    test_function_called_ = true;
     nodes_.reserve(params_.size());
 
     {
@@ -248,7 +250,6 @@ void nodes_tester_t::test_immediate_cancellation(start_order order) {
     }
 
     nodes_.clear();
-    test_function_called_ = true;
 }
 
 namespace {
@@ -264,6 +265,9 @@ namespace {
         a.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true), ec);
         a.bind({boost::asio::ip::tcp::v4(), port}, ec);
 
+        boost::system::error_code ignore;
+        a.close(ignore);
+
         return ec == boost::system::errc::address_in_use;
     }
 }
@@ -272,7 +276,7 @@ nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_
     : params_(params)
 {
     try {
-        unsigned short port_num = 41000;
+        static unsigned short port_num = 21000;
         graph_ = "digraph test {\n";
         for (const auto& p : params_) {
             graph_ += p.node_name;
