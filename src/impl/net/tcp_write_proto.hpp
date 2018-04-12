@@ -7,6 +7,7 @@
 #include <mutex>                        // unique_lock
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/optional/optional.hpp>
 
 namespace dmn {
 
@@ -18,7 +19,7 @@ public:
     using guard_t = std::unique_lock<tcp_write_proto_t>;
 
 private:
-    boost::asio::ip::tcp::socket socket_;
+    boost::optional<boost::asio::ip::tcp::socket> socket_;
     using on_send_error_t = std::function<void(boost::system::error_code, guard_t, send_error_tag)>;
     const on_send_error_t on_send_error_;
 
@@ -60,8 +61,8 @@ public:
         async_send(std::move(g), buf);
     }
 
-    // Closes the socket and leaves the link in locked state
-    void close(guard_t g) noexcept;
+    // Closes the socket
+    void close() noexcept;
 
     guard_t try_lock() noexcept;
     void unlock() noexcept;

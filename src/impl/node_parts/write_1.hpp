@@ -19,23 +19,17 @@ class node_impl_write_1: public virtual node_base_t {
 
     std::atomic<bool>               started_at_least_1_link_{false};
 
-    void reconnect_if_running(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
+    void reconnect(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
         auto& link = edge_t::link_from_guard(guard);
         // TODO: async log issue
-
-        if (ios().stopped()) {
-            // Drop the write task on the floor.
-            link.close(std::move(guard));
-            return;
-        }
 
         link.async_reconnect(std::move(guard)); // TODO: dealy?
     }
 
     void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         edge_.reschedule_packet_from_link(guard);
-        reconnect_if_running(e, std::move(guard));
+        reconnect(e, std::move(guard));
     }
 
     void on_operation_finished(tcp_write_proto_t::guard_t guard) {
@@ -65,7 +59,7 @@ public:
                 ios(),
                 [this](const auto& e, auto guard, tcp_write_proto_t::send_error_tag) { on_send_error(e, std::move(guard)); },
                 [this](auto guard) { on_operation_finished(std::move(guard)); },
-                [this](const auto& e, auto guard, tcp_write_proto_t::reconnect_error_tag) { reconnect_if_running(e, std::move(guard)); }
+                [this](const auto& e, auto guard, tcp_write_proto_t::reconnect_error_tag) { reconnect(e, std::move(guard)); }
             );
         }
         edge_.connect_links();

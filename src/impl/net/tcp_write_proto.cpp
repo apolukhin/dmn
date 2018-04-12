@@ -31,7 +31,9 @@ tcp_write_proto_t::tcp_write_proto_t(
     , helper_id_(helper_id)
 {}
 
-tcp_write_proto_t::~tcp_write_proto_t() = default;
+tcp_write_proto_t::~tcp_write_proto_t() {
+    BOOST_ASSERT_MSG(!socket_, "Socket is not closed before calling the destructor!");
+}
 
 void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     ASSERT_GUARD(g);
@@ -41,12 +43,12 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
             return;
         }
 
-        dmn::set_socket_options(socket_);
-        dmn::set_writing_ack_timeout(socket_);
+        dmn::set_socket_options(*socket_);
+        dmn::set_writing_ack_timeout(*socket_);
         on_operation_finished_(std::move(guard));
     };
 
-    socket_.async_connect(
+    socket_->async_connect(
         remote_ep_,
         make_slab_alloc_handler(slab_, std::move(on_connect))
     );
@@ -56,7 +58,7 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
 
 void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buffer, 2> buf) {
     ASSERT_GUARD(g);
-    BOOST_ASSERT(socket_.is_open());
+    BOOST_ASSERT(socket_->is_open());
 
     auto on_write = [guard = std::move(g), buf, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
@@ -68,20 +70,17 @@ void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buff
     };
 
     boost::asio::async_write(
-        socket_,
+        *socket_,
         buf,
         make_slab_alloc_handler(slab_, std::move(on_write))
     );
 }
 
-void tcp_write_proto_t::close(guard_t g) noexcept {
-    ASSERT_GUARD(g);
+void tcp_write_proto_t::close() noexcept {
     boost::system::error_code ignore;
-    socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
-    socket_.close(ignore);
-    g.release(); // leaving link in locked state
-    BOOST_ASSERT_MSG(write_lock_.load() != 0, "After close the connection is not locked");
-    BOOST_ASSERT_MSG(write_lock_.load() == 1, "After close the connection is locked multiple times");
+    socket_->shutdown(boost::asio::socket_base::shutdown_both, ignore);
+    socket_->close(ignore);
+    socket_.reset();
 }
 
 tcp_write_proto_t::guard_t tcp_write_proto_t::try_lock() noexcept {

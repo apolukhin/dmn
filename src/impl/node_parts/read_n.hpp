@@ -161,6 +161,7 @@ public:
 
     void single_threaded_io_detach_read() noexcept {
         acceptor_.close();
+        unknown_links_.close();
         for_each_edge([](auto& e){
             e.close_links();
         });

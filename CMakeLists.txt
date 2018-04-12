@@ -7,6 +7,8 @@ else ()
     set (CMAKE_CXX_STANDARD 14)
 endif ()
 
+# -DCMAKE_CXX_FLAGS_DEBUG="-fuse-ld=gold -fsanitize=address,undefined"
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
 # Boost setup

@@ -14,7 +14,7 @@ tcp_read_proto_t::tcp_read_proto_t(boost::asio::ip::tcp::socket socket, on_error
     , on_error_(std::move(on_error))
     , on_operation_finished_(std::move(on_operation_finished))
 {
-    set_socket_options(socket_);
+    set_socket_options(*socket_);
 }
 
 tcp_read_proto_t::~tcp_read_proto_t() = default;
@@ -22,7 +22,7 @@ tcp_read_proto_t::~tcp_read_proto_t() = default;
 
 void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {
     // shutdown_gracefully could happen between on_operation_finished_ and async_read.
-    // Allow ASIO deal with that, instead of calling 'BOOST_ASSERT(socket_.is_open());' here.
+    // Allow ASIO deal with that, instead of calling 'BOOST_ASSERT(socket_->is_open());' here.
 
     auto on_read = [this, data](const boost::system::error_code& e, std::size_t bytes_read) {
         if (e) {
@@ -35,7 +35,7 @@ void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {
     };
 
     boost::asio::async_read(
-        socket_,
+        *socket_,
         data,
         make_slab_alloc_handler(slab_, std::move(on_read))
     );
@@ -43,8 +43,9 @@ void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {
 
 void tcp_read_proto_t::close() noexcept {
     boost::system::error_code ignore;
-    socket_.shutdown(decltype(socket_)::shutdown_both, ignore);
-    socket_.close(ignore);
+    socket_->shutdown(boost::asio::socket_base::shutdown_both, ignore);
+    socket_->close(ignore);
+    socket_.reset();
 }
 
 } // namespace dmn

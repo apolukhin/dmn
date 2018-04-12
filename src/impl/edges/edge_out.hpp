@@ -93,12 +93,7 @@ public:
 
     void close_links() noexcept {
         for (auto& v: netlinks_) {
-            tcp_write_proto_t::guard_t lock = v.try_lock();
-            if (lock) {
-                v.close(std::move(lock));
-            } else {
-                // Link is already closed // TODO: validate
-            }
+            v.close();
         }
     }
 

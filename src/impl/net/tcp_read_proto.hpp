@@ -4,6 +4,7 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/io_service.hpp>
+#include <boost/optional/optional.hpp>
 
 namespace dmn {
 
@@ -11,7 +12,7 @@ class tcp_read_proto_t {
     DMN_PINNED(tcp_read_proto_t);
 
 private:
-    boost::asio::ip::tcp::socket socket_;
+    boost::optional<boost::asio::ip::tcp::socket> socket_;
     using on_error_t = std::function<void(tcp_read_proto_t&, const boost::system::error_code&)>;
     const on_error_t on_error_;
 

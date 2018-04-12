@@ -66,7 +66,6 @@ void nodes_tester_t::resend_sequence(void* s_void) const {
 
 void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
     auto ios_run = [&ios]() {
-        ios.reset();
         ios.run();
     };
 
