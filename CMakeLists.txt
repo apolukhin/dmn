@@ -57,6 +57,7 @@ add_library(dmn_core STATIC
     src/impl/net/netlink.hpp
     src/impl/net/packet_network.cpp
     src/impl/net/packet_network.hpp
+    src/impl/net/tcp_acceptor.hpp
     src/impl/net/tcp_read_proto.cpp
     src/impl/net/tcp_read_proto.hpp
     src/impl/net/tcp_write_proto.cpp

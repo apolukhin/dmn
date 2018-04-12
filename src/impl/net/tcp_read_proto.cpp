@@ -17,7 +17,9 @@ tcp_read_proto_t::tcp_read_proto_t(boost::asio::ip::tcp::socket socket, on_error
     set_socket_options(*socket_);
 }
 
-tcp_read_proto_t::~tcp_read_proto_t() = default;
+tcp_read_proto_t::~tcp_read_proto_t()  {
+    BOOST_ASSERT_MSG(!socket_, "Read socket must be closed before destruction!");
+}
 
 
 void tcp_read_proto_t::async_read(boost::asio::mutable_buffers_1 data) {

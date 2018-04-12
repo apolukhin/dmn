@@ -1,6 +1,7 @@
 #include "nodes_tester.hpp"
 
 #include <boost/asio/io_service.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <boost/lexical_cast.hpp>
 #include <thread>
 #include <iostream>
@@ -12,9 +13,23 @@ namespace tests {
 
 namespace {
     std::mutex g_tests_mutex;
+
+    struct nodes_guard {
+        boost::asio::io_context& ios;
+        std::vector<std::unique_ptr<dmn::node_base_t>>& nodes;
+
+        ~nodes_guard() {
+            ios.stop();
+
+            for (auto& n : nodes) {
+                n->single_threaded_io_detach();
+            }
+        }
+    };
 }
 
-#define MT_BOOST_CHECK(x) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_CHECK(x); }
+#define MT_BOOST_TEST(x) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_TEST(x); }
+#define MT_BOOST_FAIL(x) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_FAIL(x); }
 
 std::map<int, unsigned> nodes_tester_t::seq_ethalon() const {
     std::map<int, unsigned> res;
@@ -47,7 +62,7 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
         }
         unsigned seq = 0;
         const bool res = boost::conversion::try_lexical_convert<unsigned>(static_cast<const unsigned char*>(data.first), data.second, seq);
-        MT_BOOST_CHECK(res);
+        MT_BOOST_TEST(res);
         bool shutdown = false;
         {
             std::lock_guard<std::mutex> l(seq_mutex_);
@@ -74,11 +89,9 @@ void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
         try {
             ios.run();
         } catch (const std::exception& e) {
-            std::cerr << "Sudden exception during run: " << e.what() << '\n';
-            MT_BOOST_CHECK(false);
+            MT_BOOST_FAIL("Sudden exception during run: " << e.what());
         } catch (...) {
-            std::cerr << "Sudden unknown exception during run\n";
-            MT_BOOST_CHECK(false);
+            MT_BOOST_FAIL("Sudden unknown exception during run");
         }
     };
 
@@ -102,14 +115,12 @@ void nodes_tester_t::init_nodes_by(start_order order, boost::asio::io_context& i
         case start_order::node_host_reverse: init_nodes_by_node_hosts_reverse(ios); break;
         case start_order::host_node: init_nodes_by_hosts_node(ios); break;
         default:
-            MT_BOOST_CHECK(false);
+            MT_BOOST_FAIL("Unknown start_order was provided");
         }
     } catch (const std::exception& e) {
-        std::cerr << "Failed to init nodes: " << e.what() << '\n';
-        MT_BOOST_CHECK(false);
+        MT_BOOST_FAIL("Failed to init nodes: " << e.what());
     } catch (...) {
-        std::cerr << "Failed to init nodes for unknown reason\n";
-        MT_BOOST_CHECK(false);
+        MT_BOOST_FAIL("Failed to init nodes for unknown reason");
     }
 }
 
@@ -117,7 +128,7 @@ void nodes_tester_t::init_nodes_by_node_hosts(boost::asio::io_context& ios) {
     for (const auto& p : params_) {
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
             auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
-            MT_BOOST_CHECK(!!new_node);
+            MT_BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
             switch (p.act) {
@@ -140,7 +151,7 @@ void nodes_tester_t::init_nodes_by_node_hosts_reverse(boost::asio::io_context& i
 
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
             auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
-            MT_BOOST_CHECK(!!new_node);
+            MT_BOOST_TEST(!!new_node);
 
 
             nodes_.push_back(std::move(new_node));
@@ -170,7 +181,7 @@ void nodes_tester_t::init_nodes_by_hosts_node(boost::asio::io_context& ios) {
             was_host_initialized = true;
 
             auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
-            MT_BOOST_CHECK(!!new_node);
+            MT_BOOST_TEST(!!new_node);
 
             nodes_.push_back(std::move(new_node));
             switch (p.act) {
@@ -193,19 +204,16 @@ void nodes_tester_t::test(start_order order) {
     nodes_.reserve(params_.size());
     {
         boost::asio::io_context ios{threads_count_};
+        nodes_guard ng{ios, nodes_};
         init_nodes_by(order, ios);
 
         ethalon_sequences_ = seq_ethalon();
         run_impl(ios);
-
-        for (auto& n : nodes_) {
-            n->single_threaded_io_detach();
-        }
     }
 
     nodes_.clear();
     test_function_called_ = true;
-    MT_BOOST_CHECK(sequences_ == ethalon_sequences_);
+    MT_BOOST_TEST(sequences_ == ethalon_sequences_);
 }
 
 
@@ -213,6 +221,7 @@ void nodes_tester_t::test_cancellation(start_order order) {
     nodes_.reserve(params_.size());
     {
         boost::asio::io_context ios{threads_count_};
+        nodes_guard ng{ios, nodes_};
         init_nodes_by(order, ios);
 
         sequence_max(std::numeric_limits<decltype(max_seq_)>::max());
@@ -220,10 +229,6 @@ void nodes_tester_t::test_cancellation(start_order order) {
             ios.stop();
         });
         run_impl(ios);
-
-        for (auto& n : nodes_) {
-            n->single_threaded_io_detach();
-        }
     }
 
     nodes_.clear();
@@ -235,25 +240,39 @@ void nodes_tester_t::test_immediate_cancellation(start_order order) {
 
     {
         boost::asio::io_context ios{threads_count_};
+        nodes_guard ng{ios, nodes_};
         init_nodes_by(order, ios);
 
         ios.stop();
         run_impl(ios);
-
-        for (auto& n : nodes_) {
-            n->single_threaded_io_detach();
-        }
     }
 
     nodes_.clear();
     test_function_called_ = true;
+}
+
+namespace {
+    bool is_port_in_use(unsigned short port) noexcept {
+        static boost::asio::io_context ios;
+        boost::asio::ip::tcp::acceptor a{ios};
+
+        boost::system::error_code ec;
+        a.open(boost::asio::ip::tcp::v4(), ec);
+        if (ec) {
+            return true;
+        }
+        a.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true), ec);
+        a.bind({boost::asio::ip::tcp::v4(), port}, ec);
+
+        return ec == boost::system::errc::address_in_use;
+    }
 }
     
 nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_params> params)
     : params_(params)
 {
     try {
-        unsigned short port_num = 44000;
+        unsigned short port_num = 41000;
         graph_ = "digraph test {\n";
         for (const auto& p : params_) {
             graph_ += p.node_name;
@@ -262,14 +281,17 @@ nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_
                 if (i) {
                     graph_ += ';';
                 }
+                while (is_port_in_use(port_num)) ++ port_num;
                 graph_ += "127.0.0.1:" + std::to_string(port_num);
                 ++ port_num;
             }
             graph_ += "\"]\n";
         }
         graph_ += links.data + "}";
-    } catch (...) {
-        MT_BOOST_CHECK(false);
+    } catch (const std::exception& e) {
+        MT_BOOST_FAIL("Failed to generate graph: " << e.what());
+    }  catch (...) {
+        MT_BOOST_FAIL("Unknown exception during graph generation");
     }
 }
 
@@ -278,7 +300,7 @@ nodes_tester_t::nodes_tester_t(const graph_t& graph, std::initializer_list<node_
 {}
 
 nodes_tester_t::~nodes_tester_t() noexcept {
-    MT_BOOST_CHECK(test_function_called_);
+    MT_BOOST_TEST(test_function_called_);
 }
     
 }
