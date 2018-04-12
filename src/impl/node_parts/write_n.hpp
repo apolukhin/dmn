@@ -94,8 +94,6 @@ class node_impl_write_n: public virtual node_base_t {
 
     counted_packets_storage         packets_;
 
-    std::atomic<bool>               started_at_least_1_link_{false};
-
     void reconnect(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
         auto& link = edge_t::link_from_guard(guard);
@@ -111,8 +109,6 @@ class node_impl_write_n: public virtual node_base_t {
     }
 
     void on_operation_finished(tcp_write_proto_t::guard_t guard) {
-        started_at_least_1_link_.store(true); // TODO: this is a debug thing. Remove it in release builds
-
         auto& link = edge_t::link_from_guard(guard);
         packets_.send_success(link.packet.second);
         const auto id = link.helper_id();

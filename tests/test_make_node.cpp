@@ -81,102 +81,11 @@ void resend_shifted_sequence(dmn::stream_t& s) {
 
 } // anonymous namespace
 
-BOOST_AUTO_TEST_CASE(make_nodes_end_to_end) {
-    sequence_counter = 0;
-    sequences.clear();
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44001"];
-            b [hosts = "127.0.0.1:44002"];
-            a -> b;
-        }
-    )"};
-
-    auto node_a = dmn::make_node(g, "a", 0);
-    BOOST_TEST(!!node_a);
-    node_a->callback_ = generate_sequence;
-
-    auto node_b = dmn::make_node(g, "b", 0);
-    BOOST_TEST(!!node_b);
-    node_b->callback_ = remember_sequence;
 
 
-    tests::shutdown_nodes(node_a, node_b);
-
-    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon());
-}
 
 
-BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_generators) {
-    sequence_counter = 0;
-    sequences.clear();
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44001; 127.0.0.1:44002; 127.0.0.1:44003;127.0.0.1:44004;127.0.0.1:44005"];
-            b [hosts = "127.0.0.1:44006"];
-            a -> b;
-        }
-    )"};
 
-    std::unique_ptr<dmn::node_base_t> node_a_5[5] = {
-        dmn::make_node(g, "a", 0),
-        dmn::make_node(g, "a", 1),
-        dmn::make_node(g, "a", 2),
-        dmn::make_node(g, "a", 3),
-        dmn::make_node(g, "a", 4)
-    };
-    for (auto& v: node_a_5) {
-        BOOST_TEST(!!v);
-        v->callback_ = generate_sequence;
-    }
-
-    auto node_b = dmn::make_node(g, "b", 0);
-    BOOST_TEST(!!node_b);
-    node_b->callback_ = remember_sequence;
-
-
-    tests::shutdown_nodes(node_a_5[0], node_a_5[1], node_a_5[2], node_a_5[3], node_a_5[4], node_b);
-
-    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon());
-}
-
-BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5_consumers) {
-    sequence_counter = 0;
-    sequences.clear();
-    const std::string g{R"(
-        digraph test
-        {
-            a [hosts = "127.0.0.1:44006"];
-            b [hosts = "127.0.0.1:44001; 127.0.0.1:44002; 127.0.0.1:44003;127.0.0.1:44004;127.0.0.1:44005"];
-            a -> b;
-        }
-    )"};
-
-    auto node_a = dmn::make_node(g, "a", 0);
-    BOOST_TEST(!!node_a);
-    node_a->callback_ = generate_sequence;
-
-    std::unique_ptr<dmn::node_base_t> node_b_5[5] = {
-        dmn::make_node(g, "b", 0),
-        dmn::make_node(g, "b", 1),
-        dmn::make_node(g, "b", 2),
-        dmn::make_node(g, "b", 3),
-        dmn::make_node(g, "b", 4)
-    };
-    for (auto& v: node_b_5) {
-        BOOST_TEST(!!v);
-        v->callback_ = remember_sequence;
-    }
-
-    tests::shutdown_nodes(node_a, node_b_5[0], node_b_5[1], node_b_5[2], node_b_5[3], node_b_5[4]);
-
-    //std::copy(sequences.begin(), sequences.end(), std::ostream_iterator<unsigned>(std::cerr, " "));
-    BOOST_CHECK(sequences == seq_ethalon());
-}
 
 BOOST_AUTO_TEST_CASE(make_nodes_end_to_end_5) {
     sequence_counter = 0;
