@@ -38,6 +38,11 @@ enum class start_order: int {
     end_,
 };
 
+enum class ethalon_match {
+    exact,
+    partial,
+};
+
 struct node_params {
     const char* node_name;
     actions act;
@@ -60,10 +65,10 @@ class nodes_tester_t {
     std::string graph_;
     std::initializer_list<node_params> params_;
     std::initializer_list<node_name_and_host_id> skip_list_;
+    int answers_ok_to_loose_ = 0;
     bool test_function_called_ = false;
 
     int threads_count_ = 1;
-    std::vector<std::thread> threads_;
     std::vector<std::unique_ptr<dmn::node_base_t>> nodes_;
 
     void run_impl(boost::asio::io_context& ios);
@@ -72,10 +77,10 @@ class nodes_tester_t {
 
     mutable std::atomic<int> sequence_counter_{0};
     mutable std::mutex  seq_mutex_;
-    mutable std::map<int, unsigned> sequences_;
-    std::map<int, unsigned> ethalon_sequences_;
+    mutable std::vector<unsigned> sequences_;
+    std::vector<unsigned> ethalon_sequences_;
 
-    std::map<int, unsigned> seq_ethalon() const;
+    void set_seq_and_ethalon();
     void store_new_node(std::unique_ptr<dmn::node_base_t>&& node, actions action);
 
     void generate_sequence(void* s_void) const;
@@ -108,7 +113,7 @@ public:
     void test(start_order order = start_order::node_host);
     void test_cancellation(start_order order = start_order::node_host);
     void test_immediate_cancellation(start_order order = start_order::node_host);
-    void test_death(start_order order = start_order::node_host);
+    void test_death(ethalon_match match);
 
     ~nodes_tester_t() noexcept;
 };
@@ -124,3 +129,4 @@ using tests::actions;
 using tests::start_order;
 using tests::nodes_tester_t;
 using tests::hosts_count_from_num;
+using tests::ethalon_match;

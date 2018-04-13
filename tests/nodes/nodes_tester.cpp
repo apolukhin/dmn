@@ -4,7 +4,6 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/lexical_cast.hpp>
 #include <thread>
-#include <iostream>
 
 #include "node_base.hpp"
 #include "stream.hpp"
@@ -30,14 +29,14 @@ namespace {
 
 #define MT_BOOST_TEST(x) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_TEST(x); }
 #define MT_BOOST_FAIL(x) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_FAIL(x); }
-#define MT_BOOST_WARN(x) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_WARN_MESSAGE(false, x); }
+#define MT_BOOST_WARN_IF(x, msg) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_WARN_MESSAGE(x, msg); }
 
-std::map<int, unsigned> nodes_tester_t::seq_ethalon() const {
-    std::map<int, unsigned> res;
-    for (int i = 0; i <= max_seq_; ++i) {
-        res[i] = 1;
-    }
-    return res;
+void nodes_tester_t::set_seq_and_ethalon() {
+    ethalon_sequences_.clear();
+    ethalon_sequences_.resize(max_seq_, 1);
+
+    sequences_.clear();
+    sequences_.resize(max_seq_, 0);
 }
 
 void nodes_tester_t::generate_sequence(void* s_void) const {
@@ -69,7 +68,15 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
             std::lock_guard<std::mutex> l(seq_mutex_);
             ++sequences_[seq];
             shutdown = (sequences_ == ethalon_sequences_);
+            if (answers_ok_to_loose_) {
+                shutdown = shutdown
+                    || (ethalon_sequences_.size() < sequences_.size())
+                    || (ethalon_sequences_.size() - sequences_.size() <= answers_ok_to_loose_)
+                ;
+            }
         }
+
+
         if (shutdown) {
             for (const auto& node : nodes_) {
                 node->ios().stop();
@@ -96,16 +103,17 @@ void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
         }
     };
 
-    threads_.reserve(threads_count_);
+    std::vector<std::thread> threads;
+    threads.reserve(threads_count_);
 
     for (int i = 1; i < threads_count_; ++i) {
-        threads_.emplace_back(ios_run);
+        threads.emplace_back(ios_run);
     }
     ios_run();
-    for (auto& t: threads_) {
+    for (auto& t: threads) {
         t.join();
     }
-    threads_.clear();
+    threads.clear();
 }
 
 
@@ -195,7 +203,7 @@ void nodes_tester_t::test(start_order order) {
         nodes_guard ng{ios, nodes_};
         init_nodes_by(order, ios);
 
-        ethalon_sequences_ = seq_ethalon();
+        set_seq_and_ethalon();
         run_impl(ios);
     }
 
@@ -236,41 +244,62 @@ void nodes_tester_t::test_immediate_cancellation(start_order order) {
     nodes_.clear();
 }
 
-void nodes_tester_t::test_death(start_order order) {
+void nodes_tester_t::test_death(ethalon_match match) {
     test_function_called_ = true;
 
-    {
-        // Nodes that are doomed to die
-        boost::asio::io_context ios_to_kill{threads_count_};
-        for (auto& v: skip_list_) {
-            store_new_node(
-                dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
-                std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
-            );
+
+    if (match == ethalon_match::partial) {
+        int total_hosts_count = 0;
+        for (auto& p : params_) {
+            total_hosts_count += p.hosts;
         }
-        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die = std::move(nodes_);
-
-        // Nodes that must keep working after the death of other nodes
-        boost::asio::io_context ios{threads_count_};
-        nodes_guard ng{ios, nodes_};
-        init_nodes_by(order, ios);
-
-
-        std::thread t{[this, &ios]{
-            run_impl(ios);
-        }};
-
-        ios.post([&ios_to_kill, &nodes_to_die]() {
-            nodes_guard ng{ios_to_kill, nodes_to_die};
-            ios_to_kill.stop();  // ios will stop us at some point
-        });
-
-        run_impl(ios_to_kill);
-
-        t.join();
+        answers_ok_to_loose_ = max_seq_ * ((1.0 * skip_list_.size() + 1) / total_hosts_count) + 100;
     }
 
-    nodes_.clear();
+    set_seq_and_ethalon();
+
+    return;
+
+//    {
+//        // Nodes that are doomed to die
+//        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die;
+//        boost::asio::io_context ios_to_kill{threads_count_};
+//        for (auto& v: skip_list_) {
+//            store_new_node(
+//                dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
+//                std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
+//            );
+//        }
+//        nodes_to_die = std::move(nodes_);
+
+//        // Nodes that must keep working after the death of other nodes
+//        boost::asio::io_context ios{threads_count_};
+//        nodes_guard ng{ios, nodes_};
+//        init_nodes_by(start_order::node_host, ios);
+
+
+//        std::thread t_kill{[this, &ios_to_kill, &nodes_to_die] {
+//            nodes_guard ng{ios_to_kill, nodes_to_die};
+//            run_impl(ios_to_kill);
+//        }};
+
+//        std::thread t_survive{[this, &ios] {
+//            run_impl(ios);
+//        }};
+
+//        std::this_thread::sleep_for(std::chrono::microseconds(50));
+//        ios_to_kill.stop();
+
+//        t_kill.join();
+//        t_survive.join();
+//    }
+
+//    nodes_.clear();
+//    const int diff = static_cast<int>(ethalon_sequences_.size()) - sequences_.size();
+//    MT_BOOST_WARN_IF(
+//        sequences_.size() == ethalon_sequences_.size(),
+//        "Difference in `ethalon - result` == " << diff << ". Diff is " << static_cast<float>(answers_ok_to_loose_) / diff * 100 << "% of max allowed."
+//    );
 }
 
 namespace {
@@ -296,8 +325,10 @@ namespace {
 nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_params> params)
     : params_(params)
 {
+    nodes_.reserve(params_.size());
     try {
         static unsigned short port_num = 21000;
+        graph_.reserve(50 + 32 * params_.size());
         graph_ = "digraph test {\n";
         for (const auto& p : params_) {
             graph_ += p.node_name;
@@ -307,7 +338,8 @@ nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_
                     graph_ += ';';
                 }
                 while (is_port_in_use(port_num)) ++ port_num;
-                graph_ += "127.0.0.1:" + std::to_string(port_num);
+                graph_ += "127.0.0.1:";
+                graph_ += std::to_string(port_num);
                 ++ port_num;
             }
             graph_ += "\"]\n";

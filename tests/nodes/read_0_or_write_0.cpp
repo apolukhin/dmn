@@ -99,6 +99,8 @@ BOOST_DATA_TEST_CASE(chain_immediate_cancellation_hosts_x_threads,
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
+/// Tests where only some nodes were started or some of the nodes survived
+///
 
 BOOST_DATA_TEST_CASE(few_nodes_failed_to_start,
     (boost::unit_test::data::xrange(1, 16) * boost::unit_test::data::xrange(1, 5)),
@@ -120,6 +122,26 @@ BOOST_DATA_TEST_CASE(few_nodes_failed_to_start,
     .test();
 }
 
+BOOST_DATA_TEST_CASE(few_nodes_died,
+    (boost::unit_test::data::xrange(1, 16) * boost::unit_test::data::xrange(1, 5)),
+    hosts_num, threads_count
+) {
+    nodes_tester_t{
+        tests::links_t{"a -> b"},
+        {
+            {"a", actions::generate, hosts_count_from_num<0, 2>(hosts_num) + 1},
+            {"b", actions::remember, hosts_count_from_num<2, 2>(hosts_num) + 1},
+        }
+    }
+    .threads(threads_count)
+    .sequence_max(512)
+    .skip({
+        {"a", 0},
+        {"b", 1},
+    })
+    .test_death(ethalon_match::partial);
+}
+
 BOOST_DATA_TEST_CASE(few_producers_started,
     boost::unit_test::data::xrange(1, 5),
     threads_count
@@ -137,6 +159,25 @@ BOOST_DATA_TEST_CASE(few_producers_started,
         {"a", 0},{"a", 1},{"a", 2},{"a", 3},{"a", 4},{"a", 5},{"a", 6},{"a", 7},{"a", 8},
     })
     .test();
+}
+
+BOOST_DATA_TEST_CASE(few_producers_survived,
+    boost::unit_test::data::xrange(1, 5),
+    threads_count
+) {
+    nodes_tester_t{
+        tests::links_t{"a -> b"},
+        {
+            {"a", actions::generate, 10},
+            {"b", actions::remember, 10},
+        }
+    }
+    .threads(threads_count)
+    .sequence_max(512)
+    .skip({
+        {"a", 0},{"a", 1},{"a", 2},{"a", 3},{"a", 4},{"a", 5},{"a", 6},{"a", 7},{"a", 8},
+    })
+    .test_death(ethalon_match::partial);
 }
 
 BOOST_DATA_TEST_CASE(few_consumers_started,
@@ -158,6 +199,25 @@ BOOST_DATA_TEST_CASE(few_consumers_started,
     .test();
 }
 
+BOOST_DATA_TEST_CASE(few_consumers_survived,
+    boost::unit_test::data::xrange(1, 5),
+    threads_count
+) {
+    nodes_tester_t{
+        tests::links_t{"a -> b"},
+        {
+            {"a", actions::generate, 10},
+            {"b", actions::remember, 10},
+        }
+    }
+    .threads(threads_count)
+    .sequence_max(512)
+    .skip({
+        {"b", 0},{"b", 1},{"b", 2},{"b", 3},{"b", 4},{"b", 5},{"b", 6},{"b", 7},{"b", 8},
+    })
+    .test_death(ethalon_match::partial);
+}
+
 BOOST_DATA_TEST_CASE(few_nodes_started,
     boost::unit_test::data::xrange(1, 5),
     threads_count
@@ -176,6 +236,26 @@ BOOST_DATA_TEST_CASE(few_nodes_started,
         {"b", 0},{"b", 1},{"b", 2},{"b", 3},{"b", 4},{"b", 5},{"b", 6},{"b", 7},{"b", 8},
     })
     .test();
+}
+
+BOOST_DATA_TEST_CASE(few_nodes_survived,
+    boost::unit_test::data::xrange(1, 5),
+    threads_count
+) {
+    nodes_tester_t{
+        tests::links_t{"a -> b"},
+        {
+            {"a", actions::generate, 10},
+            {"b", actions::remember, 10},
+        }
+    }
+    .threads(threads_count)
+    .sequence_max(512)
+    .skip({
+        {"a", 0},{"a", 1},{"a", 2},{"a", 3},{"a", 4},{"a", 5},{"a", 6},{"a", 7},{"a", 8},
+        {"b", 0},{"b", 1},{"b", 2},{"b", 3},{"b", 4},{"b", 5},{"b", 6},{"b", 7},{"b", 8},
+    })
+    .test_death(ethalon_match::partial);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
