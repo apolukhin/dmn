@@ -25,9 +25,8 @@ class node_impl_read_0: public virtual node_base_t {
             p.place_header();
             p.header().wave_id = new_wave();
 
-            start();
-
             on_packet_accept(std::move(p));
+            start();
         });
     }
 public:

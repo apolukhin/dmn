@@ -13,6 +13,7 @@ namespace tests {
 
 namespace {
     std::mutex g_tests_mutex;
+    std::atomic_uintmax_t g_ticks{};
 
     struct nodes_guard {
         boost::asio::io_context& ios;
@@ -43,6 +44,8 @@ void nodes_tester_t::set_seq_and_ethalon() {
 }
 
 void nodes_tester_t::generate_sequence(void* s_void) const {
+    ++g_ticks;
+
     dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     const int seq = sequence_counter_.fetch_add(1);
 
@@ -57,6 +60,8 @@ void nodes_tester_t::generate_sequence(void* s_void) const {
 }
 
 void nodes_tester_t::remember_sequence(void* s_void) const {
+    ++g_ticks;
+
     dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     for (const char* data_type: {"seq", "seq0", "seq1", "seq2", "seq3", "seq4", "seq5", "seq6", "seq7", "seq8", "seq9", "seq10"}) {
         const auto data = s.get_data(data_type);
@@ -82,6 +87,8 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
 }
 
 void nodes_tester_t::resend_sequence(void* s_void) const {
+    ++g_ticks;
+
     dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     const auto data = s.get_data("seq");
     s.add(data.first, data.second, "seq");
@@ -292,7 +299,12 @@ void nodes_tester_t::test_death(ethalon_match match) {
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            decltype(g_ticks.load()) old_ticks;
+            do {
+                old_ticks = g_ticks.load();
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            } while (old_ticks != g_ticks.load());
+
             ios.stop();
         }};
 
@@ -321,9 +333,10 @@ void nodes_tester_t::test_death(ethalon_match match) {
 
         MT_BOOST_TEST(answers_ok_to_loose >= diff);
 
+        const double percent = diff / static_cast<double>(answers_ok_to_loose) * 100;
         MT_BOOST_WARN_IF_NOT(
-            !diff,
-            "Difference is " << diff << " (" << std::setprecision(2) << diff / static_cast<float>(answers_ok_to_loose) * 100 << "% of max allowed)."
+            percent <= 33.0,
+            "Difference is " << diff << " (" << std::setprecision(2) << percent << "% of max allowed)."
         );
     } else {
         MT_BOOST_TEST(sequences_ == ethalon_sequences_);
