@@ -109,6 +109,26 @@ void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
 }
 
 
+void nodes_tester_t::store_new_node(std::unique_ptr<dmn::node_base_t>&& node, actions action) {
+    MT_BOOST_TEST(!!node);
+
+    nodes_.push_back(std::move(node));
+    switch (action) {
+    case actions::generate:
+        nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
+        break;
+    case actions::remember:
+        nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
+        break;
+    case actions::resend:
+        nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
+        break;
+    default:
+        MT_BOOST_FAIL("Unknown action was provided");
+    }
+}
+
+
 void nodes_tester_t::init_nodes_by(start_order order, boost::asio::io_context& ios) {
     try {
         switch (order) {
@@ -128,48 +148,27 @@ void nodes_tester_t::init_nodes_by(start_order order, boost::asio::io_context& i
 void nodes_tester_t::init_nodes_by_node_hosts(boost::asio::io_context& ios) {
     for (const auto& p : params_) {
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
-            auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
-            MT_BOOST_TEST(!!new_node);
-
-            nodes_.push_back(std::move(new_node));
-            switch (p.act) {
-            case actions::generate:
-                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
-                break;
-            case actions::remember:
-                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
-                break;
-            case actions::resend:
-                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
-                break;
+            if (std::find(skip_list_.begin(), skip_list_.end(), node_name_and_host_id{p.node_name, host_id}) != skip_list_.end()) {
+                continue;
             }
+            store_new_node(dmn::make_node(ios, graph_, p.node_name, host_id), p.act);
         }
     }
 }
+
 void nodes_tester_t::init_nodes_by_node_hosts_reverse(boost::asio::io_context& ios) {
     for (unsigned i = 0; i < params_.size(); ++i) {
         const auto& p = *(params_.begin() + params_.size() - i - 1);
 
         for (int host_id = 0; host_id < p.hosts; ++host_id) {
-            auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
-            MT_BOOST_TEST(!!new_node);
-
-
-            nodes_.push_back(std::move(new_node));
-            switch (p.act) {
-            case actions::generate:
-                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
-                break;
-            case actions::remember:
-                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
-                break;
-            case actions::resend:
-                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
-                break;
+            if (std::find(skip_list_.begin(), skip_list_.end(), node_name_and_host_id{p.node_name, host_id}) != skip_list_.end()) {
+                continue;
             }
+            store_new_node(dmn::make_node(ios, graph_, p.node_name, host_id), p.act);
         }
     }
 }
+
 void nodes_tester_t::init_nodes_by_hosts_node(boost::asio::io_context& ios) {
     bool was_host_initialized = true;
     for (int host_id = 0; was_host_initialized; ++host_id) {
@@ -181,29 +180,16 @@ void nodes_tester_t::init_nodes_by_hosts_node(boost::asio::io_context& ios) {
             }
             was_host_initialized = true;
 
-            auto new_node = dmn::make_node(ios, graph_, p.node_name, host_id);
-            MT_BOOST_TEST(!!new_node);
-
-            nodes_.push_back(std::move(new_node));
-            switch (p.act) {
-            case actions::generate:
-                nodes_.back()->callback_ = [this](auto& s) { generate_sequence(&s); };
-                break;
-            case actions::remember:
-                nodes_.back()->callback_ = [this](auto& s) { remember_sequence(&s); };
-                break;
-            case actions::resend:
-                nodes_.back()->callback_ = [this](auto& s) { resend_sequence(&s); };
-                break;
+            if (std::find(skip_list_.begin(), skip_list_.end(), node_name_and_host_id{p.node_name, host_id}) != skip_list_.end()) {
+                continue;
             }
+            store_new_node(dmn::make_node(ios, graph_, p.node_name, host_id), p.act);
         }
     }
-
 }
 
 void nodes_tester_t::test(start_order order) {
     test_function_called_ = true;
-    nodes_.reserve(params_.size());
     {
         boost::asio::io_context ios{threads_count_};
         nodes_guard ng{ios, nodes_};
@@ -220,7 +206,6 @@ void nodes_tester_t::test(start_order order) {
 
 void nodes_tester_t::test_cancellation(start_order order) {
     test_function_called_ = true;
-    nodes_.reserve(params_.size());
     {
         boost::asio::io_context ios{threads_count_};
         nodes_guard ng{ios, nodes_};
@@ -238,7 +223,6 @@ void nodes_tester_t::test_cancellation(start_order order) {
 
 void nodes_tester_t::test_immediate_cancellation(start_order order) {
     test_function_called_ = true;
-    nodes_.reserve(params_.size());
 
     {
         boost::asio::io_context ios{threads_count_};
@@ -247,6 +231,43 @@ void nodes_tester_t::test_immediate_cancellation(start_order order) {
 
         ios.stop();
         run_impl(ios);
+    }
+
+    nodes_.clear();
+}
+
+void nodes_tester_t::test_death(start_order order) {
+    test_function_called_ = true;
+
+    {
+        // Nodes that are doomed to die
+        boost::asio::io_context ios_to_kill{threads_count_};
+        for (auto& v: skip_list_) {
+            store_new_node(
+                dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
+                std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
+            );
+        }
+        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die = std::move(nodes_);
+
+        // Nodes that must keep working after the death of other nodes
+        boost::asio::io_context ios{threads_count_};
+        nodes_guard ng{ios, nodes_};
+        init_nodes_by(order, ios);
+
+
+        std::thread t{[this, &ios]{
+            run_impl(ios);
+        }};
+
+        ios.post([&ios_to_kill, &nodes_to_die]() {
+            nodes_guard ng{ios_to_kill, nodes_to_die};
+            ios_to_kill.stop();  // ios will stop us at some point
+        });
+
+        run_impl(ios_to_kill);
+
+        t.join();
     }
 
     nodes_.clear();
@@ -301,10 +322,12 @@ nodes_tester_t::nodes_tester_t(const links_t& links, std::initializer_list<node_
 
 nodes_tester_t::nodes_tester_t(const graph_t& graph, std::initializer_list<node_params> params)
     : graph_(graph.data)
-{}
+{
+    nodes_.reserve(params_.size());
+}
 
 nodes_tester_t::~nodes_tester_t() noexcept {
-    MT_BOOST_TEST(test_function_called_);
+    BOOST_TEST(test_function_called_);
 }
     
 }

@@ -44,12 +44,22 @@ struct node_params {
     int hosts = 1;
 };
 
+struct node_name_and_host_id {
+    const char* node_name;
+    int host_id;
+};
+
+inline bool operator==(node_name_and_host_id lhs, node_name_and_host_id rhs) noexcept {
+    return !std::strcmp(lhs.node_name, rhs.node_name) && lhs.host_id == rhs.host_id;
+}
+
 class nodes_tester_t {
     nodes_tester_t(const nodes_tester_t&) = delete;
     nodes_tester_t& operator=(const nodes_tester_t&) = delete;
 
     std::string graph_;
     std::initializer_list<node_params> params_;
+    std::initializer_list<node_name_and_host_id> skip_list_;
     bool test_function_called_ = false;
 
     int threads_count_ = 1;
@@ -66,6 +76,7 @@ class nodes_tester_t {
     std::map<int, unsigned> ethalon_sequences_;
 
     std::map<int, unsigned> seq_ethalon() const;
+    void store_new_node(std::unique_ptr<dmn::node_base_t>&& node, actions action);
 
     void generate_sequence(void* s_void) const;
     void remember_sequence(void* s_void) const;
@@ -89,9 +100,15 @@ public:
         return *this;
     }
 
+    nodes_tester_t& skip(std::initializer_list<node_name_and_host_id> skip_list) {
+        skip_list_ = skip_list;
+        return *this;
+    }
+
     void test(start_order order = start_order::node_host);
     void test_cancellation(start_order order = start_order::node_host);
     void test_immediate_cancellation(start_order order = start_order::node_host);
+    void test_death(start_order order = start_order::node_host);
 
     ~nodes_tester_t() noexcept;
 };
