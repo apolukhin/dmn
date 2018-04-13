@@ -40,7 +40,8 @@ enum class start_order: int {
 
 enum class ethalon_match {
     exact,
-    partial,
+    proportional,
+    percent_10,
 };
 
 struct node_params {
@@ -65,7 +66,6 @@ class nodes_tester_t {
     std::string graph_;
     std::initializer_list<node_params> params_;
     std::initializer_list<node_name_and_host_id> skip_list_;
-    int answers_ok_to_loose_ = 0;
     bool test_function_called_ = false;
 
     int threads_count_ = 1;

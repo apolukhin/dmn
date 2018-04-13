@@ -37,7 +37,7 @@ public:
     std::uint16_t count_out_edges() const noexcept;
 
     virtual void on_packet_accept(packet_t packet) = 0;
-    packet_t call_callback(packet_t packet) noexcept;
+    packet_t call_callback(packet_t packet);
     virtual void single_threaded_io_detach() noexcept = 0;
     virtual ~node_base_t() noexcept;
 };

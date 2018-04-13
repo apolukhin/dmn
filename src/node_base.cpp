@@ -98,7 +98,7 @@ std::uint16_t node_base_t::count_out_edges() const noexcept {
     return static_cast<std::uint16_t>(edges_out_count);
 }
 
-packet_t node_base_t::call_callback(packet_t packet) noexcept {
+packet_t node_base_t::call_callback(packet_t packet) {
     stream_t s{*this, std::move(packet)};
 
     node_base_t::callback_(s);

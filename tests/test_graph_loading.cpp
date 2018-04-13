@@ -3,6 +3,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
+BOOST_AUTO_TEST_SUITE(load_graph)
+
 struct exception_message {
     const std::string msg;
 
@@ -13,7 +15,7 @@ struct exception_message {
     }
 };
 
-BOOST_AUTO_TEST_CASE(graph_loading_wrong_syntax1) {
+BOOST_AUTO_TEST_CASE(wrong_syntax1) {
     const std::string ss{R"(
         digrph test
         {
@@ -22,7 +24,7 @@ BOOST_AUTO_TEST_CASE(graph_loading_wrong_syntax1) {
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::exception, exception_message{"Wanted \"graph\" or \"digraph\" (token is \"<identifier> 'digrph'\")"});
 }
 
-BOOST_AUTO_TEST_CASE(graph_loading_wrong_syntax2) {
+BOOST_AUTO_TEST_CASE(wrong_syntax2) {
     const std::string ss{R"(
         digraph test
         { a -----> b
@@ -31,7 +33,7 @@ BOOST_AUTO_TEST_CASE(graph_loading_wrong_syntax2) {
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::exception, exception_message{"Using -- in directed graph (token is \"<dash-dash> '--'\")"});
 }
 
-BOOST_AUTO_TEST_CASE(graph_loading_base) {
+BOOST_AUTO_TEST_CASE(base) {
     const std::string ss{R"(
         digraph test
         {
@@ -293,3 +295,5 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_incomming_edges) {
         "Each vertex must have at most 65535 incomming edges. Vertex 'c' has 65539 incomming edges."
     });
 }
+
+BOOST_AUTO_TEST_SUITE_END()

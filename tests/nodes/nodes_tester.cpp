@@ -4,6 +4,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/lexical_cast.hpp>
 #include <thread>
+#include <iomanip>
 
 #include "node_base.hpp"
 #include "stream.hpp"
@@ -25,11 +26,13 @@ namespace {
             }
         }
     };
+
+    struct shutdown_generator{};
 }
 
 #define MT_BOOST_TEST(x) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_TEST(x); }
 #define MT_BOOST_FAIL(x) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_FAIL(x); }
-#define MT_BOOST_WARN_IF(x, msg) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_WARN_MESSAGE(x, msg); }
+#define MT_BOOST_WARN_IF_NOT(x, msg) if (!(x)) { std::lock_guard<std::mutex> lock{g_tests_mutex}; BOOST_WARN_MESSAGE(x, msg); }
 
 void nodes_tester_t::set_seq_and_ethalon() {
     ethalon_sequences_.clear();
@@ -49,7 +52,7 @@ void nodes_tester_t::generate_sequence(void* s_void) const {
     }
 
     if (seq >= max_seq_) {
-        std::this_thread::sleep_for(std::chrono::microseconds(50));
+        throw shutdown_generator{};
     }
 }
 
@@ -68,14 +71,7 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
             std::lock_guard<std::mutex> l(seq_mutex_);
             ++sequences_[seq];
             shutdown = (sequences_ == ethalon_sequences_);
-            if (answers_ok_to_loose_) {
-                shutdown = shutdown
-                    || (ethalon_sequences_.size() < sequences_.size())
-                    || (ethalon_sequences_.size() - sequences_.size() <= answers_ok_to_loose_)
-                ;
-            }
         }
-
 
         if (shutdown) {
             for (const auto& node : nodes_) {
@@ -95,7 +91,16 @@ void nodes_tester_t::resend_sequence(void* s_void) const {
 void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
     auto ios_run = [&ios]() {
         try {
-            ios.run();
+
+            bool ok_to_restart;
+            do {
+                ok_to_restart = false;
+                try { ios.run();
+                } catch (shutdown_generator g) {
+                    ok_to_restart = true;
+                }
+            } while (ok_to_restart);
+
         } catch (const std::exception& e) {
             MT_BOOST_FAIL("Sudden exception during run: " << e.what());
         } catch (...) {
@@ -247,59 +252,82 @@ void nodes_tester_t::test_immediate_cancellation(start_order order) {
 void nodes_tester_t::test_death(ethalon_match match) {
     test_function_called_ = true;
 
-
-    if (match == ethalon_match::partial) {
-        int total_hosts_count = 0;
-        for (auto& p : params_) {
-            total_hosts_count += p.hosts;
-        }
-        answers_ok_to_loose_ = max_seq_ * ((1.0 * skip_list_.size() + 1) / total_hosts_count) + 100;
-    }
-
     set_seq_and_ethalon();
 
-    return;
+    {
+        // Nodes that are doomed to die
+        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die;
+        boost::asio::io_context ios_to_kill{threads_count_};
+        for (auto& v: skip_list_) {
+            store_new_node(
+                dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
+                std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
+            );
+        }
+        nodes_to_die = std::move(nodes_);
 
-//    {
-//        // Nodes that are doomed to die
-//        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die;
-//        boost::asio::io_context ios_to_kill{threads_count_};
-//        for (auto& v: skip_list_) {
-//            store_new_node(
-//                dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
-//                std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
-//            );
-//        }
-//        nodes_to_die = std::move(nodes_);
-
-//        // Nodes that must keep working after the death of other nodes
-//        boost::asio::io_context ios{threads_count_};
-//        nodes_guard ng{ios, nodes_};
-//        init_nodes_by(start_order::node_host, ios);
+        // Nodes that must keep working after the death of other nodes
+        boost::asio::io_context ios{threads_count_};
+        nodes_guard ng{ios, nodes_};
+        init_nodes_by(start_order::node_host, ios);
 
 
-//        std::thread t_kill{[this, &ios_to_kill, &nodes_to_die] {
-//            nodes_guard ng{ios_to_kill, nodes_to_die};
-//            run_impl(ios_to_kill);
-//        }};
+        std::thread t_kill{[this, &ios, &ios_to_kill, &nodes_to_die] {
+            {
+                nodes_guard ng{ios_to_kill, nodes_to_die};
+                try {
+                    for (unsigned i = 0; i < skip_list_.size() * 2; ++ i) {
+                        try {
+                            ios_to_kill.run_one_for(std::chrono::milliseconds(30));
+                        } catch (shutdown_generator g) {
+                            // OK
+                            (void)g;
+                        }
+                    }
+                    ios_to_kill.stop();
+                } catch (const std::exception& e) {
+                    MT_BOOST_FAIL("Sudden exception during run: " << e.what());
+                } catch (...) {
+                    MT_BOOST_FAIL("Sudden unknown exception during run");
+                }
+            }
 
-//        std::thread t_survive{[this, &ios] {
-//            run_impl(ios);
-//        }};
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            ios.stop();
+        }};
 
-//        std::this_thread::sleep_for(std::chrono::microseconds(50));
-//        ios_to_kill.stop();
+        run_impl(ios);
 
-//        t_kill.join();
-//        t_survive.join();
-//    }
+        t_kill.join();
+    }
 
-//    nodes_.clear();
-//    const int diff = static_cast<int>(ethalon_sequences_.size()) - sequences_.size();
-//    MT_BOOST_WARN_IF(
-//        sequences_.size() == ethalon_sequences_.size(),
-//        "Difference in `ethalon - result` == " << diff << ". Diff is " << static_cast<float>(answers_ok_to_loose_) / diff * 100 << "% of max allowed."
-//    );
+    nodes_.clear();
+    int diff = 0;
+    for (unsigned i = 0; i < ethalon_sequences_.size(); ++ i){
+        if (ethalon_sequences_[i] != sequences_[i]) ++diff;
+    }
+
+    if (match == ethalon_match::proportional || match == ethalon_match::percent_10) {
+        int answers_ok_to_loose = 0;
+        if (match == ethalon_match::proportional) {
+            int total_hosts_count = 0;
+            for (auto& p : params_) {
+                total_hosts_count += p.hosts;
+            }
+            answers_ok_to_loose = max_seq_ * ((1.0 * skip_list_.size() + 1) / total_hosts_count);
+        } else if (match == ethalon_match::percent_10) {
+            answers_ok_to_loose = max_seq_ * 0.9;
+        }
+
+        MT_BOOST_TEST(answers_ok_to_loose >= diff);
+
+        MT_BOOST_WARN_IF_NOT(
+            !diff,
+            "Difference is " << diff << " (" << std::setprecision(2) << diff / static_cast<float>(answers_ok_to_loose) * 100 << "% of max allowed)."
+        );
+    } else {
+        MT_BOOST_TEST(sequences_ == ethalon_sequences_);
+    }
 }
 
 namespace {
