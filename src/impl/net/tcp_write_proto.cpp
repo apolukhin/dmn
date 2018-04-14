@@ -39,6 +39,7 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     ASSERT_GUARD(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
         if (e) {
+            set_less_stable();
             on_reconnect_error_(e, std::move(guard), {});
             return;
         }
@@ -62,9 +63,12 @@ void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buff
 
     auto on_write = [guard = std::move(g), buf, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
+            set_less_stable();
             on_send_error_(e, std::move(guard), {});
             return;
         }
+
+        set_more_stable();
         BOOST_ASSERT_MSG(boost::asio::buffer_size(buf) == bytes_written, "Wrong bytes count written");
         on_operation_finished_(std::move(guard));
     };

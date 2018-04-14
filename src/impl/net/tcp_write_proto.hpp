@@ -33,6 +33,21 @@ private:
     const std::size_t                    helper_id_;
     std::atomic<int> write_lock_ {0};
 
+
+    int stability_measue_{0};
+    void set_less_stable() noexcept {
+        -- stability_measue_;
+        if (stability_measue_ < -100) {
+            stability_measue_ = -100;
+        }
+    }
+    void set_more_stable() noexcept {
+        ++ stability_measue_;
+        if (stability_measue_ > 100) {
+            stability_measue_ = 100;
+        }
+    }
+
     slab_allocator_t slab_;
 
 protected:
@@ -52,6 +67,10 @@ public:
 
     std::size_t helper_id() const noexcept {
         return helper_id_;
+    }
+
+    int stability() const noexcept {
+        return stability_measue_;
     }
 
     void async_send(guard_t g, std::array<boost::asio::const_buffer, 2> data);

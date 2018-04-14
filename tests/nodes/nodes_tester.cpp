@@ -4,7 +4,6 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/lexical_cast.hpp>
 #include <thread>
-#include <iomanip>
 
 #include "node_base.hpp"
 #include "stream.hpp"
@@ -12,8 +11,10 @@
 namespace tests {
 
 namespace {
+    // Depends on OS context switch time and time slices that are given to the process.
+    constexpr auto max_time_to_wait_for_a_single_task = std::chrono::milliseconds{500};
+
     std::mutex g_tests_mutex;
-    std::atomic_uintmax_t g_ticks{};
 
     struct nodes_guard {
         boost::asio::io_context& ios;
@@ -44,12 +45,12 @@ void nodes_tester_t::set_seq_and_ethalon() {
 }
 
 void nodes_tester_t::generate_sequence(void* s_void) const {
-    ++g_ticks;
+    ++ticks_;
 
     dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     const int seq = sequence_counter_.fetch_add(1);
 
-    if (seq <= max_seq_) {
+    if (seq < max_seq_) {
         auto data = boost::lexical_cast<std::string>(seq);
         s.add(data.data(), data.size(), "seq");
     }
@@ -60,7 +61,7 @@ void nodes_tester_t::generate_sequence(void* s_void) const {
 }
 
 void nodes_tester_t::remember_sequence(void* s_void) const {
-    ++g_ticks;
+    ++ticks_;
 
     dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     for (const char* data_type: {"seq", "seq0", "seq1", "seq2", "seq3", "seq4", "seq5", "seq6", "seq7", "seq8", "seq9", "seq10"}) {
@@ -87,7 +88,7 @@ void nodes_tester_t::remember_sequence(void* s_void) const {
 }
 
 void nodes_tester_t::resend_sequence(void* s_void) const {
-    ++g_ticks;
+    ++ticks_;
 
     dmn::stream_t& s = *static_cast<dmn::stream_t*>(s_void);
     const auto data = s.get_data("seq");
@@ -96,13 +97,16 @@ void nodes_tester_t::resend_sequence(void* s_void) const {
 
 
 void nodes_tester_t::run_impl(boost::asio::io_context& ios) {
-    auto ios_run = [&ios]() {
+    auto ios_run = [&ios, this]() {
         try {
 
             bool ok_to_restart;
             do {
                 ok_to_restart = false;
-                try { ios.run();
+                try {
+                    const decltype(ticks_.load()) old_ticks = ticks_.load();
+                    ios.run_for(max_time_to_wait_for_a_single_task);
+                    ok_to_restart = (old_ticks != ticks_.load());
                 } catch (shutdown_generator g) {
                     ok_to_restart = true;
                 }
@@ -221,6 +225,11 @@ void nodes_tester_t::test(start_order order) {
 
     nodes_.clear();
     MT_BOOST_TEST(sequences_ == ethalon_sequences_);
+    if (sequences_ != ethalon_sequences_) {
+        for (unsigned i = 0; i < ethalon_sequences_.size(); ++i) {
+            BOOST_TEST(sequences_[i] != ethalon_sequences_[i], "Error at index " << i);
+        }
+    }
 }
 
 
@@ -262,50 +271,51 @@ void nodes_tester_t::test_death(ethalon_match match) {
     set_seq_and_ethalon();
 
     {
-        // Nodes that are doomed to die
-        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die;
-        boost::asio::io_context ios_to_kill{threads_count_};
-        for (auto& v: skip_list_) {
-            store_new_node(
-                dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
-                std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
-            );
-        }
-        nodes_to_die = std::move(nodes_);
-
         // Nodes that must keep working after the death of other nodes
         boost::asio::io_context ios{threads_count_};
         nodes_guard ng{ios, nodes_};
         init_nodes_by(start_order::node_host, ios);
 
+        const auto nodes_to_survive_count = nodes_.size();
+
+        // Also initing nodes that are doomed to die
+        std::vector<std::unique_ptr<dmn::node_base_t>> nodes_to_die;
+        boost::asio::io_context ios_to_kill{threads_count_};
+        for (auto& v: skip_list_) {
+            try {
+                store_new_node(
+                    dmn::make_node(ios_to_kill, graph_, v.node_name, v.host_id),
+                    std::find_if(params_.begin(), params_.end(), [v](const auto& val){ return !std::strcmp(val.node_name, v.node_name); })->act
+                );
+            } catch (const std::exception& e) {
+                MT_BOOST_FAIL("Exception during doomed nodes construction:" << e.what());
+                ios_to_kill.stop();
+                throw;
+            }
+        }
+        nodes_to_die.assign(
+            std::make_move_iterator(nodes_.begin() + nodes_to_survive_count),
+            std::make_move_iterator(nodes_.end())
+        );
+        nodes_.resize(nodes_to_survive_count);
 
         std::thread t_kill{[this, &ios, &ios_to_kill, &nodes_to_die] {
-            {
+            try {
                 nodes_guard ng{ios_to_kill, nodes_to_die};
-                try {
-                    for (unsigned i = 0; i < skip_list_.size() * 2; ++ i) {
-                        try {
-                            ios_to_kill.run_one_for(std::chrono::milliseconds(30));
-                        } catch (shutdown_generator g) {
-                            // OK
-                            (void)g;
-                        }
+                for (unsigned i = 0; i < skip_list_.size() * 2; ++i) {
+                    try {
+                        ios_to_kill.run_one_for(max_time_to_wait_for_a_single_task);
+                    } catch (shutdown_generator g) {
+                        // OK
+                        (void)g;
                     }
-                    ios_to_kill.stop();
-                } catch (const std::exception& e) {
-                    MT_BOOST_FAIL("Sudden exception during run: " << e.what());
-                } catch (...) {
-                    MT_BOOST_FAIL("Sudden unknown exception during run");
                 }
+                ios_to_kill.stop();
+            } catch (const std::exception& e) {
+                MT_BOOST_FAIL("Sudden exception during run: " << e.what());
+            } catch (...) {
+                MT_BOOST_FAIL("Sudden unknown exception during run");
             }
-
-            decltype(g_ticks.load()) old_ticks;
-            do {
-                old_ticks = g_ticks.load();
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            } while (old_ticks != g_ticks.load());
-
-            ios.stop();
         }};
 
         run_impl(ios);
@@ -315,7 +325,7 @@ void nodes_tester_t::test_death(ethalon_match match) {
 
     nodes_.clear();
     int diff = 0;
-    for (unsigned i = 0; i < ethalon_sequences_.size(); ++ i){
+    for (unsigned i = 0; i < ethalon_sequences_.size(); ++i){
         if (ethalon_sequences_[i] != sequences_[i]) ++diff;
     }
 
@@ -328,15 +338,15 @@ void nodes_tester_t::test_death(ethalon_match match) {
             }
             answers_ok_to_loose = max_seq_ * ((1.0 * skip_list_.size() + 1) / total_hosts_count);
         } else if (match == ethalon_match::percent_10) {
-            answers_ok_to_loose = max_seq_ * 0.9;
+            answers_ok_to_loose = max_seq_ * 0.91;
         }
 
         MT_BOOST_TEST(answers_ok_to_loose >= diff);
 
-        const double percent = diff / static_cast<double>(answers_ok_to_loose) * 100;
+        const int percent = diff * 100 / answers_ok_to_loose;
         MT_BOOST_WARN_IF_NOT(
-            percent <= 33.0,
-            "Difference is " << diff << " (" << std::setprecision(2) << percent << "% of max allowed)."
+            percent <= 100,
+            "Difference is " << diff << " (" << percent << "% of max allowed)."
         );
     } else {
         MT_BOOST_TEST(sequences_ == ethalon_sequences_);

@@ -79,6 +79,7 @@ class nodes_tester_t {
     mutable std::mutex  seq_mutex_;
     mutable std::vector<unsigned> sequences_;
     std::vector<unsigned> ethalon_sequences_;
+    mutable std::atomic_uintmax_t ticks_{};
 
     void set_seq_and_ethalon();
     void store_new_node(std::unique_ptr<dmn::node_base_t>&& node, actions action);

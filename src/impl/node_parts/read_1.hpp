@@ -29,20 +29,16 @@ class node_impl_read_1: public virtual node_base_t {
     }
 
     void on_accept(const boost::system::error_code& error) {
-        if (error) {
-            BOOST_ASSERT_MSG(!error, "Error while accepting");
-            // TODO: log
+        auto new_socket = acceptor_.extract_socket();
+        start_accept(); // TODO: timeout, in case of error!
 
-            start_accept();
-            return;
-        }
+        BOOST_ASSERT_MSG(!error, "Error while accepting");
 
         auto link_ptr = link_t::construct(
-            acceptor_.extract_socket(),
+            std::move(new_socket),
             [this](auto& proto, const auto& e) { on_error(link_t::to_link(proto), e); },
             [this](auto& proto) { on_operation_finished(link_t::to_link(proto)); }
         );
-        start_accept();
 
         auto& link = edge_.add_link(std::move(link_ptr));
         link.async_read(link.packet.header_mutable_buffer());

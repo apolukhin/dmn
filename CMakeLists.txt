@@ -54,6 +54,7 @@ add_library(dmn_core STATIC
     src/impl/edges/edge_in.hpp
     src/impl/edges/edge_out.hpp
 
+    src/impl/net/interval_timer.hpp
     src/impl/net/netlink.hpp
     src/impl/net/packet_network.cpp
     src/impl/net/packet_network.hpp
