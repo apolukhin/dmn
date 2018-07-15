@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_outgoing_edges) {
     ss.reserve(20 * std::numeric_limits<std::uint16_t>::max());
     ss += "digraph test {";
 
-    for (std::size_t i = 0; i <= std::numeric_limits<std::uint16_t>::max(); ++i) {
+    for (std::size_t i = 0; i <= dmn::max_in_or_out_edges_per_node; ++i) {
         const auto id = boost::lexical_cast<std::array<char, 30>>(i);
         ss += "a->b";
         ss += id.data();
@@ -266,7 +266,7 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_outgoing_edges) {
     ss += "}";
 
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
-        "Each vertex must have at most 65535 outgoing edges. Vertex 'a' has 65536 outgoing edges."
+        "Each vertex must have at most 11000 outgoing edges. Vertex 'a' has 11001 outgoing edges."
     });
 }
 
@@ -275,7 +275,7 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_incomming_edges) {
     ss.reserve(20 * std::numeric_limits<std::uint16_t>::max());
     ss += "digraph test { c;";
 
-    for (std::size_t i = 0; i < std::numeric_limits<std::uint16_t>::max() - 1; ++i) {
+    for (std::size_t i = 0; i < dmn::max_in_or_out_edges_per_node - 1; ++i) {
         const auto id = boost::lexical_cast<std::array<char, 30>>(i);
         ss += "a->b";
         ss += id.data();
@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE(graph_vertex_data_too_many_incomming_edges) {
     ss += "}";
 
     BOOST_CHECK_EXCEPTION(dmn::load_graph(ss), std::runtime_error, exception_message {
-        "Each vertex must have at most 65535 incomming edges. Vertex 'c' has 65539 incomming edges."
+        "Each vertex must have at most 11000 incomming edges. Vertex 'c' has 11004 incomming edges."
     });
 }
 

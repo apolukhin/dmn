@@ -5,6 +5,8 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/optional/optional.hpp>
 
+#include "impl/net/wrap_handler.hpp"
+
 namespace dmn {
 
 class interval_timer {
@@ -13,39 +15,33 @@ class interval_timer {
 private:
     boost::optional<boost::asio::steady_timer>                  timer_;
     const std::chrono::milliseconds ms_;
+    slab_allocator_t allocator_;
 
-    void reschedule(boost::system::error_code ec) {
+    template <class F>
+    void reschedule(F func) {
         timer_->expires_after(ms_);
-        timer_->async_wait([this](boost::system::error_code ec){
-            reschedule(ec);
-        });
+        timer_->async_wait(dmn::make_slab_alloc_handler(
+            allocator_,
+            [this, func = std::move(func)](boost::system::error_code ec) mutable {
+                func();
+                if (!ec) {
+                    reschedule(std::move(func));
+                }
+            }
+        ));
     }
 
 public:
-    interval_timer(boost::asio::io_context& ios, std::chrono::milliseconds ms)
+    template <class F>
+    interval_timer(boost::asio::io_context& ios, std::chrono::milliseconds ms, F function)
         : timer_{ios}
         , ms_(ms)
     {
-        timer_->expires_after(ms_);
-        timer_->async_wait([this](boost::system::error_code ec){
-            reschedule(ec);
-        });
+        reschedule(std::move(function));
     }
+
     ~interval_timer() {
         BOOST_ASSERT_MSG(!timer_, "Timer must be closed before destruction!");
-    }
-
-    template <class F>
-    void async_wait_err(F f) {
-        timer_->async_wait(std::move(f));
-    }
-
-    template <class F>
-    void async_wait(F f) {
-        timer_->async_wait([f = std::move(f)](auto ec) mutable {
-            BOOST_ASSERT_MSG(!ec || ec == boost::system::errc::operation_canceled, "Unexpected error code.");
-            f();
-        });
     }
 
     void close() noexcept {

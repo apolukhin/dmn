@@ -40,6 +40,19 @@ inline slab_alloc_handler<typename std::remove_reference<Handler>::type> make_sl
     return {a, std::forward<Handler>(h)};
 }
 
+#define DMN_USE_SLAB(class_name)                                                                \
+    void* allocate(std::size_t size) { return this_.slab_.allocate(size); }                     \
+    void deallocate(void* pointer) noexcept { this_.slab_.deallocate(pointer); }                \
+    inline friend void* asio_handler_allocate(std::size_t size, class_name* this_handler) {     \
+        return this_handler->allocate(size);                                                    \
+    }                                                                                           \
+    inline friend void asio_handler_deallocate(void* pointer, std::size_t /*size*/,             \
+            class_name* this_handler) noexcept                                                  \
+    {                                                                                           \
+        this_handler->deallocate(pointer);                                                      \
+    }                                                                                           \
+/**/
+
 } // namespace dmn
 
 

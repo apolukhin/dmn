@@ -126,23 +126,23 @@ void validate_vertexes(const graph_t& graph) {
         const vertex_t& v = graph[*vp.first];
 
         const auto edges_in = boost::in_edges(*vp.first, graph);
-        if (edges_in.second - edges_in.first > std::numeric_limits<std::uint16_t>::max()) {
+        if (edges_in.second - edges_in.first > max_in_or_out_edges_per_node) {
             throw std::runtime_error(
                 "Each vertex must have at most "
-                + boost::lexical_cast<std::string>(std::numeric_limits<std::uint16_t>::max())
+                + std::to_string(max_in_or_out_edges_per_node)
                 + " incomming edges. Vertex '" + v.node_id + "' has "
-                + boost::lexical_cast<std::string>(edges_in.second - edges_in.first)
+                + std::to_string(edges_in.second - edges_in.first)
                 + " incomming edges."
             );
         }
 
         const auto edges_out = boost::out_edges(*vp.first, graph);
-        if (edges_out.second - edges_out.first > std::numeric_limits<std::uint16_t>::max()) {
+        if (edges_out.second - edges_out.first > max_in_or_out_edges_per_node) {
             throw std::runtime_error(
                 "Each vertex must have at most "
-                + boost::lexical_cast<std::string>(std::numeric_limits<std::uint16_t>::max())
+                + std::to_string(max_in_or_out_edges_per_node)
                 + " outgoing edges. Vertex '" + v.node_id + "' has "
-                + boost::lexical_cast<std::string>(edges_out.second - edges_out.first)
+                + std::to_string(edges_out.second - edges_out.first)
                 + " outgoing edges."
             );
         }

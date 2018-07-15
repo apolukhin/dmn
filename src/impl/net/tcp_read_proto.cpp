@@ -15,6 +15,7 @@ tcp_read_proto_t::tcp_read_proto_t(boost::asio::ip::tcp::socket socket, on_error
     , on_operation_finished_(std::move(on_operation_finished))
 {
     set_socket_options(*socket_);
+    //set_socket_read_buffer(*socket_);
 }
 
 tcp_read_proto_t::~tcp_read_proto_t()  {

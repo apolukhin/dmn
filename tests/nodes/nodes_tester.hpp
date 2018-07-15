@@ -38,11 +38,21 @@ enum class start_order: int {
     end_,
 };
 
-enum class ethalon_match {
-    exact,
-    proportional,
-    percent_10,
-};
+enum class percent: int {};
+
+template <class T>
+constexpr auto operator*(percent lhs, T value) {
+    return static_cast<double>(lhs) / 100 * value;
+}
+
+template <class T>
+constexpr auto operator*(T value, percent rhs) {
+    return rhs * value;
+}
+
+constexpr percent operator "" _perc(unsigned long long val) noexcept {
+    return static_cast<percent>(val);
+}
 
 struct node_params {
     const char* node_name;
@@ -66,7 +76,8 @@ class nodes_tester_t {
     std::string graph_;
     std::initializer_list<node_params> params_;
     std::initializer_list<node_name_and_host_id> skip_list_;
-    bool test_function_called_ = false;
+    mutable bool test_function_called_ = false;
+    percent match_ = 100_perc;
 
     int threads_count_ = 1;
     std::vector<std::unique_ptr<dmn::node_base_t>> nodes_;
@@ -78,8 +89,9 @@ class nodes_tester_t {
     mutable std::atomic<int> sequence_counter_{0};
     mutable std::mutex  seq_mutex_;
     mutable std::vector<unsigned> sequences_;
+    mutable int accepted_packets_ = 0;
+    mutable bool shutdown_ = false;
     std::vector<unsigned> ethalon_sequences_;
-    mutable std::atomic_uintmax_t ticks_{};
 
     void set_seq_and_ethalon();
     void store_new_node(std::unique_ptr<dmn::node_base_t>&& node, actions action);
@@ -92,6 +104,8 @@ class nodes_tester_t {
     void init_nodes_by_node_hosts(boost::asio::io_context& ios);
     void init_nodes_by_node_hosts_reverse(boost::asio::io_context& ios);
     void init_nodes_by_hosts_node(boost::asio::io_context& ios);
+
+    void validate_results() const;
 public:
     nodes_tester_t(const links_t& links, std::initializer_list<node_params> params);
     nodes_tester_t(const graph_t& graph, std::initializer_list<node_params> params);
@@ -114,7 +128,7 @@ public:
     void test(start_order order = start_order::node_host);
     void test_cancellation(start_order order = start_order::node_host);
     void test_immediate_cancellation(start_order order = start_order::node_host);
-    void test_death(ethalon_match match);
+    void test_death(percent match);
 
     ~nodes_tester_t() noexcept;
 };
@@ -130,4 +144,5 @@ using tests::actions;
 using tests::start_order;
 using tests::nodes_tester_t;
 using tests::hosts_count_from_num;
-using tests::ethalon_match;
+using tests::percent;
+using tests::operator "" _perc;

@@ -139,7 +139,7 @@ BOOST_DATA_TEST_CASE(some_nodes_survived,
         {"a", 0},
         {"b", 1},
     })
-    .test_death(ethalon_match::proportional);
+    .test_death(50_perc);
 }
 
 BOOST_DATA_TEST_CASE(few_producers_started,
@@ -177,7 +177,7 @@ BOOST_DATA_TEST_CASE(few_producers_survived,
     .skip({
         {"a", 0},{"a", 1},{"a", 2},{"a", 3},{"a", 4},{"a", 5},{"a", 6},{"a", 7},{"a", 8},
     })
-    .test_death(ethalon_match::percent_10);
+    .test_death(10_perc);
 }
 
 BOOST_DATA_TEST_CASE(few_consumers_started,
@@ -215,7 +215,7 @@ BOOST_DATA_TEST_CASE(few_consumers_survived,
     .skip({
         {"b", 0},{"b", 1},{"b", 2},{"b", 3},{"b", 4},{"b", 5},{"b", 6},{"b", 7},{"b", 8},
     })
-    .test_death(ethalon_match::percent_10);
+    .test_death(9_perc);
 }
 
 BOOST_DATA_TEST_CASE(few_nodes_started,
@@ -255,7 +255,7 @@ BOOST_DATA_TEST_CASE(few_nodes_survived,
         {"a", 0},{"a", 1},{"a", 2},{"a", 3},{"a", 4},{"a", 5},{"a", 6},{"a", 7},{"a", 8},
         {"b", 0},{"b", 1},{"b", 2},{"b", 3},{"b", 4},{"b", 5},{"b", 6},{"b", 7},{"b", 8},
     })
-    .test_death(ethalon_match::proportional);
+    .test_death(9_perc);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -39,4 +39,6 @@ using graph_t = boost::adjacency_list<
 
 graph_t load_graph(const std::string& in);
 
+constexpr std::size_t max_in_or_out_edges_per_node = 11000;
+
 }

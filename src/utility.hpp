@@ -32,4 +32,6 @@ inline cbytes_ptr_t as_bytes_ptr(const void* p) noexcept {
 #   define DMN_DEBUG 1
 #endif
 
+struct empty{};
+
 } // namespace dmn

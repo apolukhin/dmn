@@ -1,16 +1,17 @@
 #include "nodes_tester.hpp"
 
-BOOST_AUTO_TEST_SUITE(read_1_write_1)
+BOOST_AUTO_TEST_SUITE(read_n_write_n)
 
 BOOST_DATA_TEST_CASE(hosts_x_threads,
     (boost::unit_test::data::xrange(1, 8) * boost::unit_test::data::xrange(1, 5)),
     hosts_num, threads_count
 ) {
     nodes_tester_t{
-        tests::links_t{"a -> b -> c"},
+        tests::links_t{"a -> b0 -> c; a -> b1 -> c;"},
         {
             {"a", actions::generate, hosts_count_from_num<0>(hosts_num)},
-            {"b", actions::resend, hosts_count_from_num<1>(hosts_num)},
+            {"b0", actions::resend, 1 /*hosts_count_from_num<1>(hosts_num)*/},
+            {"b1", actions::resend, 1 /*hosts_count_from_num<1>(hosts_num)*/},
             {"c", actions::remember, hosts_count_from_num<2>(hosts_num)},
         }
     }
@@ -19,7 +20,7 @@ BOOST_DATA_TEST_CASE(hosts_x_threads,
     .test();
 }
 
-
+/*
 BOOST_DATA_TEST_CASE(node_start_permutations,
     (boost::unit_test::data::xrange(1, 8) * boost::unit_test::data::xrange(1, 5) * boost::unit_test::data::xrange(0, (int)tests::start_order::end_)),
     hosts_num, threads_count, start_order_int
@@ -363,5 +364,5 @@ BOOST_DATA_TEST_CASE(chain_immediate_cancellation_hosts_x_threads,
     .threads(threads_count)
     .test_immediate_cancellation();
 }
-
+*/
 BOOST_AUTO_TEST_SUITE_END()

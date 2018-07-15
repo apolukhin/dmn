@@ -5,6 +5,7 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/write.hpp>
+#include <boost/make_unique.hpp>
 
 namespace dmn {
 
@@ -39,8 +40,24 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     ASSERT_GUARD(g);
     auto on_connect = [guard = std::move(g), this](const boost::system::error_code& e) mutable {
         if (e) {
-            set_less_stable();
-            on_reconnect_error_(e, std::move(guard), {});
+
+            ++instability_;
+            if (!instability_.is_max()) {
+                auto timer_ptr = boost::make_unique<boost::asio::steady_timer>(socket_->get_io_context());
+                auto& timer = *timer_ptr;
+                timer.expires_after(instability_.timeout());
+
+                auto on_expire = [this, guard = std::move(guard), t = std::move(timer_ptr)](boost::system::error_code ec) mutable {
+                    t.reset();
+
+                    async_reconnect(std::move(guard));
+                };
+
+                timer.async_wait(make_slab_alloc_handler(slab_, std::move(on_expire)));
+            } else {
+                on_reconnect_error_(e, std::move(guard), {});
+            }
+
             return;
         }
 
@@ -55,28 +72,56 @@ void tcp_write_proto_t::async_reconnect(tcp_write_proto_t::guard_t g) {
     );
 }
 
+struct tcp_write_proto_t::on_write {
+    DMN_USE_SLAB(on_write)
 
+    tcp_write_proto_t&          this_;
+    tcp_write_proto_t::guard_t  guard_;
+    std::size_t                 buf_size_;
+
+    on_write(tcp_write_proto_t::guard_t guard, std::size_t buf_size)
+        : this_{*guard.mutex()}
+        , guard_{std::move(guard)}
+        , buf_size_{buf_size}
+    {}
+
+    void operator()(const boost::system::error_code e, std::size_t bytes_written) {
+        if (e) {
+            ++this_.instability_;
+            this_.on_send_error_(e, std::move(guard_), {});
+            return;
+        }
+
+        --this_.instability_;
+        BOOST_ASSERT_MSG(buf_size_ == bytes_written, "Wrong bytes count written");
+        this_.on_operation_finished_(std::move(guard_));
+    }
+};
 
 void tcp_write_proto_t::async_send(guard_t g, std::array<boost::asio::const_buffer, 2> buf) {
     ASSERT_GUARD(g);
     BOOST_ASSERT(socket_->is_open());
 
+    /*
+
     auto on_write = [guard = std::move(g), buf, this](const boost::system::error_code& e, std::size_t bytes_written) mutable {
         if (e) {
-            set_less_stable();
+            ++instability_;
             on_send_error_(e, std::move(guard), {});
             return;
         }
 
-        set_more_stable();
+        --instability_;
         BOOST_ASSERT_MSG(boost::asio::buffer_size(buf) == bytes_written, "Wrong bytes count written");
         on_operation_finished_(std::move(guard));
     };
 
+*/
+
     boost::asio::async_write(
         *socket_,
         buf,
-        make_slab_alloc_handler(slab_, std::move(on_write))
+        on_write{std::move(g), boost::asio::buffer_size(buf)}
     );
 }
 

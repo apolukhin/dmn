@@ -86,7 +86,7 @@ void netlink_back_and_forth_test_impl(dmn::packet_t&& packet) {
 
 }
 
-BOOST_AUTO_TEST_CASE(netlink_back_and_forth) {
+BOOST_AUTO_TEST_CASE(back_and_forth) {
     dmn::packet_t native1;
     const unsigned char d1[] = "hello";
     native1.add_data(d1, 5, "type1");
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(netlink_back_and_forth) {
 }
 
 
-BOOST_AUTO_TEST_CASE(netlink_back_and_forth_huge_data) {
+BOOST_AUTO_TEST_CASE(back_and_forth_huge_data) {
     dmn::packet_t p;
     std::vector<unsigned char> data;
     data.resize(1024*1024*16, 'X');
@@ -105,13 +105,13 @@ BOOST_AUTO_TEST_CASE(netlink_back_and_forth_huge_data) {
     netlink_back_and_forth_test_impl(std::move(p));
 }
 
-BOOST_AUTO_TEST_CASE(netlink_back_and_forth_empty) {
+BOOST_AUTO_TEST_CASE(back_and_forth_empty) {
     dmn::packet_t p;
     p.add_data(nullptr, 0, "");
     netlink_back_and_forth_test_impl(std::move(p));
 }
 
-BOOST_AUTO_TEST_CASE(netlink_back_and_forth_multiple_flags) {
+BOOST_AUTO_TEST_CASE(back_and_forth_multiple_flags) {
     dmn::packet_t p;
 
     char name[2] = {0, 0};
@@ -120,6 +120,69 @@ BOOST_AUTO_TEST_CASE(netlink_back_and_forth_multiple_flags) {
         p.add_data(nullptr, 0, name);
     }
     netlink_back_and_forth_test_impl(std::move(p));
+}
+
+// Tries to reconnect untill succeeds
+
+struct socket_reconnect_t {
+    const char* name;
+    boost::asio::ip::tcp::tcp::socket socket;
+    const boost::asio::ip::tcp::endpoint ep;
+    bool started = false;
+    bool success = false;
+
+    void operator()(boost::system::error_code ec) {
+        if (ec) {
+            BOOST_TEST(!success);
+            socket.async_connect(ep,
+                [this](auto ec){ (*this)(ec); }
+            );
+            return;
+        }
+        success = true;
+        boost::system::error_code ignore;
+        socket.shutdown(boost::asio::socket_base::shutdown_both, ignore);
+        socket.close();
+    }
+
+    void operator()() {
+        if (started) {
+            return;
+        }
+        started = true;
+        socket.async_connect(ep,
+            [this](auto ec){ (*this)(ec); }
+        );
+    }
+};
+
+BOOST_AUTO_TEST_CASE(acceptor_rebind) {
+    boost::asio::io_context ios;
+
+    const boost::asio::ip::tcp::endpoint ep{boost::asio::ip::address::from_string("127.0.0.1"), 42042};
+    socket_reconnect_t socket1{"1 socket", boost::asio::ip::tcp::tcp::socket{ios}, ep};
+    socket_reconnect_t socket2{"2 socket", boost::asio::ip::tcp::tcp::socket{ios}, ep};
+
+    dmn::tcp_acceptor accept1{ios, "127.0.0.1", 42042};
+    boost::optional<dmn::tcp_acceptor> accept2;
+
+    accept1.async_accept([&](auto /*ec*/){
+        accept1.close();
+        accept2.emplace(ios, "127.0.0.1", 42042);
+        accept2->async_accept([&](auto /*ec*/){
+            accept2->close();
+        });
+
+        socket2();
+    });
+
+    socket1();
+    ios.run();
+
+    BOOST_TEST(socket1.started);
+    BOOST_TEST(socket1.success); // socket reconnected
+    BOOST_TEST(socket2.started);
+    BOOST_TEST(socket2.success); // socket reconnected
 }
 
 BOOST_AUTO_TEST_SUITE_END()

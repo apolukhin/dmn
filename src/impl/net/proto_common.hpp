@@ -31,6 +31,16 @@ namespace dmn {
     }
 
     template <class Socket>
+    void set_socket_read_buffer(Socket& s, unsigned buf_size /*= 1024 * 1024*/) {
+        BOOST_ASSERT_MSG(s.is_open(), "Attempt to set socket options on a closed socket");
+
+        boost::system::error_code ignore;
+        boost::asio::socket_base::receive_buffer_size rcv_buffer(buf_size);
+        s.set_option(rcv_buffer, ignore);
+        BOOST_ASSERT_MSG(!ignore, "Failed to set receive_buffer_size for socket");
+    }
+
+    template <class Socket>
     void set_socket_options(Socket& s) {
         BOOST_ASSERT_MSG(s.is_open(), "Attempt to set socket options on a closed socket");
 

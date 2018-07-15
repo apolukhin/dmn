@@ -6,7 +6,6 @@
 #include "impl/work_counter.hpp"
 
 #include "impl/net/netlink.hpp"
-#include "impl/net/interval_timer.hpp"
 #include "impl/net/packet_network.hpp"
 
 #include "impl/edges/edge_out.hpp"
@@ -17,7 +16,6 @@ class node_impl_write_1: public virtual node_base_t {
     using edge_t = edge_out_round_robin_t<packet_network_t>;
     using link_t = edge_t::link_t;
     edge_t                          edge_;
-    interval_timer                  timer_;
 
     void reconnect(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
         BOOST_ASSERT_MSG(guard, "Empty guard in error handler");
@@ -25,14 +23,7 @@ class node_impl_write_1: public virtual node_base_t {
         // TODO: async log issue
 
         auto& link = edge_t::link_from_guard(guard);
-        if (link.stability() > -5) {
-            link.async_reconnect(std::move(guard));
-        } else {
-            timer_.async_wait([guard = std::move(guard)]() mutable {
-                auto& link = edge_t::link_from_guard(guard);
-                link.async_reconnect(std::move(guard));
-            });
-        }
+        link.async_reconnect(std::move(guard));
     }
 
     void on_send_error(const boost::system::error_code& e, tcp_write_proto_t::guard_t guard) {
@@ -47,7 +38,6 @@ class node_impl_write_1: public virtual node_base_t {
 public:
     node_impl_write_1()
         : edge_(edge_id_for_receiver())
-        , timer_(ios(), std::chrono::milliseconds(50))
     {
         const auto edges_out = boost::out_edges(
             this_node_descriptor,
@@ -82,7 +72,6 @@ public:
     }
 
     void single_threaded_io_detach_write() noexcept {
-        timer_.close();
         edge_.close_links();
     }
 };

@@ -13,8 +13,8 @@ namespace dmn {
 // It contains blocks of memory which may be returned for allocation
 // requests. If the memory blocks are in use when an allocation request is made, the
 // allocator delegates allocation to the global heap.
-template <std::size_t SlabSize, std::size_t SlabsCount>
-class slab_allocator_basic_t {
+template <std::size_t SlabSize, std::size_t SlabsCount, class Base = empty>
+class slab_allocator_basic_t final : public Base {
     DMN_PINNED(slab_allocator_basic_t);
 
 public:
@@ -29,7 +29,7 @@ public:
         }
 
         const std::size_t blocks_required = (size - 1) / sizeof(storage_t) + 1;
-        return blocks_required == 1 ? allocate_single(size) : allocate_multiple(blocks_required, size);
+        return allocate_multiple(blocks_required, size);
     }
 
     void deallocate(void* pointer) noexcept {
@@ -78,18 +78,6 @@ private:
             in_use_[i] = static_cast<in_use_t>(blocks_required);
             std::fill(in_use_ + i + 1, in_use_ + i + blocks_required, (std::numeric_limits<in_use_t>::max)());
             return storages_ + i;
-        }
-
-        BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empty slabs");
-        return ::operator new(size);
-    }
-
-    void* allocate_single(std::size_t size) {
-        for (std::size_t i = 0; i < SlabsCount; ++i) {
-            if (!in_use_[i]) {
-                in_use_[i] = static_cast<in_use_t>(1u);
-                return storages_ + i;
-            }
         }
 
         BOOST_ASSERT_MSG(false, "Slab allocator does not have enough empty slabs");

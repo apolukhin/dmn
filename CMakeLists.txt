@@ -1,34 +1,52 @@
 project(DMN)
 cmake_minimum_required(VERSION 2.8)
+enable_testing()
 
-if (CMAKE_VERSION VERSION_LESS "3.1")
-    set (CMAKE_CXX_FLAGS "-std=c++14 ${CMAKE_CXX_FLAGS}")
-else ()
-    set (CMAKE_CXX_STANDARD 14)
-endif ()
-
-# -DCMAKE_CXX_FLAGS_DEBUG="-fuse-ld=gold -fsanitize=address,undefined"
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
 # Boost setup
 if (NOT BOOST_ROOT)
-    Set(BOOST_ROOT "/data/boost")
+    set(BOOST_ROOT "/data/boost_1_67_0")
 endif()
-add_definitions(-DBOOST_TEST_DYN_LINK)
-add_definitions(-DBOOST_THREAD_VERSION=4)
-add_definitions(-DBOOST_ASIO_DISABLE_HANDLER_TYPE_REQUIREMENTS=1)
-add_definitions(-DBOOST_ENABLE_ASSERT_DEBUG_HANDLER=1)
-set(Boost_NO_SYSTEM_PATHS ON)
-set(Boost_USE_STATIC_LIBS OFF)
-find_package(Boost COMPONENTS filesystem thread unit_test_framework system graph regex REQUIRED)
-include_directories(${Boost_INCLUDE_DIRS} src)
+set(Boost_NO_SYSTEM_PATHS OFF)
+set(Boost_USE_STATIC_LIBS ON)
+find_package(Boost COMPONENTS filesystem thread system graph regex unit_test_framework REQUIRED)
 link_directories(${Boost_LIBRARY_DIRS})
 MESSAGE("Using Boost libraries path: ${Boost_LIBRARY_DIRS}")
 
 
-add_library(dmn_core STATIC
+# Project configuration
+add_definitions(-DBOOST_THREAD_VERSION=4)
+add_definitions(-DBOOST_ASIO_DISABLE_HANDLER_TYPE_REQUIREMENTS=1)
+add_definitions(-DBOOST_ENABLE_ASSERT_DEBUG_HANDLER=1)
+include_directories(${Boost_INCLUDE_DIRS} src)
 
+if (MSVC)
+else()
+    add_compile_options(-std=c++14)
+    add_compile_options(-fvisibility=hidden)
+    add_compile_options(-Wno-deprecated-declarations)
+
+    if (CMAKE_BUILD_TYPE MATCHES DEBUG)
+        add_compile_definitions(-D_GLIBCXX_DEBUG_PEDANTIC)
+    else()
+        add_definitions(-DNDEBUG)
+
+        # LTO flags
+        add_compile_options(-flto)
+        set(CMAKE_AR  "gcc-ar")
+        set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> qcs <TARGET> <LINK_FLAGS> <OBJECTS>")
+        set(CMAKE_C_ARCHIVE_FINISH   true)
+        set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> qcs <TARGET> <LINK_FLAGS> <OBJECTS>")
+        set(CMAKE_CXX_ARCHIVE_FINISH   true)
+        set_property(DIRECTORY . PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+    endif()
+
+    # -DCMAKE_CXX_FLAGS_DEBUG="-fuse-ld=gold -fsanitize=address,undefined"
+endif()
+
+
+# Core library
+add_library(dmn_core STATIC
     src/assert.cpp
 
     src/load_graph.cpp
@@ -47,6 +65,7 @@ add_library(dmn_core STATIC
     src/impl/lazy_array.hpp
     src/impl/packet.cpp
     src/impl/packet.hpp
+    src/impl/saturation_timer.hpp
     src/impl/silent_mt_queue.hpp
     src/impl/state_tracker.hpp
     src/impl/work_counter.hpp
@@ -76,14 +95,14 @@ add_library(dmn_core STATIC
     src/impl/node_parts/write_1.hpp
     src/impl/node_parts/write_n.hpp
 )
+target_link_libraries(dmn_core PRIVATE ${Boost_SYSTEM_LIBRARY} ${Boost_GRAPH_LIBRARY} ${Boost_REGEX_LIBRARY} -ldl -lpthread )
 
 
+# Main executable
 add_executable(dmn src/main.cpp)
 
-
+# Tests
 aux_source_directory(tests SRC_LIST_TESTS)
 aux_source_directory(tests/nodes SRC_LIST_TESTS_NODES)
-
 add_executable(dmn_tests ${SRC_LIST_TESTS} ${SRC_LIST_TESTS_NODES} tests/tests_common.hpp)
-set_property(TARGET dmn_tests PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
-target_link_libraries(dmn_tests dmn_core boost_system boost_regex boost_graph -ldl ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} -lpthread)
+target_link_libraries(dmn_tests dmn_core ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
